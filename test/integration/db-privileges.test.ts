@@ -63,6 +63,9 @@ describe('the application role', () => {
     ['alter a tally result', `UPDATE tally_results SET key_id = 'x'`],
     ['read migration history', 'SELECT * FROM _prisma_migrations'],
     ['create a table', 'CREATE TABLE evil (id int)'],
+    ['fake the authorization balance', `UPDATE authorization_counters SET sessions = sessions + 1`],
+    ['fake the ballot balance', `UPDATE ballot_counters SET ballots = ballots + 1`],
+    ['insert counters', `INSERT INTO ballot_counters (election_id) SELECT gen_random_uuid()`],
   ])('cannot %s (42501)', async (_label, sql) => {
     expect(await sqlStateAsApp(sql)).toBe(INSUFFICIENT_PRIVILEGE);
   });

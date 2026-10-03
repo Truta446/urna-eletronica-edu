@@ -224,3 +224,29 @@ describe('INV-7: concurrent requests with the same token produce exactly one bal
     expect(await t.prisma.ballot.count()).toBe(40);
   });
 });
+
+describe('balance counters (O(1) balances)', () => {
+  it('match the real counts after concurrent authorizations and votes', async () => {
+    const { election, tokens } = await createElectionWithTokens(t, clock, { voters: 30 });
+    await Promise.all(
+      tokens.slice(0, 20).map((token) => castBallot(t, { token, electionId: election.id })),
+    );
+
+    const [counters] = await t.prisma.$queryRaw<
+      { authorized: bigint; sessions: bigint; consumed: bigint; ballots: bigint }[]
+    >`
+      SELECT (SELECT sum(authorized_voters) FROM authorization_counters WHERE election_id = e.id)::bigint AS authorized,
+             (SELECT sum(sessions) FROM authorization_counters WHERE election_id = e.id)::bigint AS sessions,
+             (SELECT sum(consumed_sessions) FROM ballot_counters WHERE election_id = e.id)::bigint AS consumed,
+             (SELECT sum(ballots) FROM ballot_counters WHERE election_id = e.id)::bigint AS ballots
+        FROM elections e WHERE e.id = ${election.id}::uuid`;
+    expect(counters).toEqual({ authorized: 30n, sessions: 30n, consumed: 20n, ballots: 20n });
+    // 16 shards por eleição, e a carga se espalhou por mais de um.
+    const used = await t.prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM ballot_counters WHERE election_id = ${election.id}::uuid AND ballots > 0`;
+    expect(Number(used[0]?.n)).toBeGreaterThan(1);
+    expect(await t.prisma.ballotCounters.count({ where: { electionId: election.id } })).toBe(16);
+    expect(await t.prisma.voter.count({ where: { hasVoted: true } })).toBe(30);
+    expect(await t.prisma.ballot.count()).toBe(20);
+  });
+});

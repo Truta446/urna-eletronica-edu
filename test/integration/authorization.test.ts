@@ -79,9 +79,10 @@ describe('POST /elections/:id/voting-sessions', () => {
       SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
     for (const { tablename } of tables) {
       const rows = await t.prisma.$queryRawUnsafe<unknown[]>(`SELECT * FROM "${tablename}"`);
-      const dump = JSON.stringify(rows, (_k, v: unknown) =>
-        v instanceof Uint8Array ? Buffer.from(v).toString('base64url') : v,
-      );
+      const dump = JSON.stringify(rows, (_k, v: unknown) => {
+        if (v instanceof Uint8Array) return Buffer.from(v).toString('base64url');
+        return typeof v === 'bigint' ? v.toString() : v;
+      });
       expect(dump, tablename).not.toContain(token);
     }
   });

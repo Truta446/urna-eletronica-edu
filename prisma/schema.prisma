@@ -22,21 +22,23 @@ enum ElectionStatus {
 
 /// Transições e congelamento de campos são garantidos por trigger (ver migration).
 model Election {
-  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                String
-  status              ElectionStatus      @default(DRAFT)
-  startsAt            DateTime            @map("starts_at") @db.Timestamptz(3)
-  endsAt              DateTime            @map("ends_at") @db.Timestamptz(3)
-  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  status                ElectionStatus          @default(DRAFT)
+  startsAt              DateTime                @map("starts_at") @db.Timestamptz(3)
+  endsAt                DateTime                @map("ends_at") @db.Timestamptz(3)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   /// v2: chave pública X25519 (HPKE) da eleição. Nula = votos em claro (v1). Congelada após DRAFT.
-  encryptionPublicKey Bytes?              @map("encryption_public_key")
-  candidates          Candidate[]
-  voters              Voter[]
-  votingSessions      VotingSession[]
-  ballots             Ballot[]
-  idempotency         IdempotencyRecord[]
-  auditEvents         AuditEvent[]
-  tallyResult         TallyResult?
+  encryptionPublicKey   Bytes?                  @map("encryption_public_key")
+  candidates            Candidate[]
+  voters                Voter[]
+  votingSessions        VotingSession[]
+  ballots               Ballot[]
+  idempotency           IdempotencyRecord[]
+  auditEvents           AuditEvent[]
+  tallyResult           TallyResult?
+  authorizationCounters AuthorizationCounters[]
+  ballotCounters        BallotCounters[]
 
   @@map("elections")
 }
@@ -188,4 +190,30 @@ model TallyResult {
   election      Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("tally_results")
+}
+
+/// Contadores de balanço mantidos SÓ por triggers (SECURITY DEFINER). A aplicação apenas lê.
+/// Ver migration balance_counters: substituem count(*) por operação (O(n)) por O(1).
+model AuthorizationCounters {
+  electionId       String   @map("election_id") @db.Uuid
+  /// 16 linhas por eleição (0..15): reduz a disputa de lock entre transações.
+  shard            Int      @default(0) @db.SmallInt
+  authorizedVoters BigInt   @default(0) @map("authorized_voters")
+  sessions         BigInt   @default(0)
+  election         Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([electionId, shard])
+  @@map("authorization_counters")
+}
+
+model BallotCounters {
+  electionId       String   @map("election_id") @db.Uuid
+  /// 16 linhas por eleição (0..15): reduz a disputa de lock entre transações.
+  shard            Int      @default(0) @db.SmallInt
+  consumedSessions BigInt   @default(0) @map("consumed_sessions")
+  ballots          BigInt   @default(0)
+  election         Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([electionId, shard])
+  @@map("ballot_counters")
 }
