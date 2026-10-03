@@ -57,6 +57,10 @@ export function registerElectionRoutes(
     return toElectionResponse(await elections.close(id, getOperator(request)));
   });
 
+  app.get('/elections', async () => ({
+    elections: (await elections.list()).map(toElectionResponse),
+  }));
+
   app.get('/elections/:id', async (request) => {
     const { id } = electionIdParams.parse(request.params);
     return toElectionResponse(await elections.get(id));

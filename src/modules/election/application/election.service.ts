@@ -172,7 +172,16 @@ export function createElectionService({ prisma, clock, signer }: ElectionService
     throw new BusinessRuleError('Election can only be closed after endsAt');
   }
 
-  return { create, get, open, close };
+  /** Mais recentes primeiro. Dados públicos (os mesmos de GET /elections/:id). */
+  async function list(): Promise<Election[]> {
+    return prisma.election.findMany({
+      select: electionSelect,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  return { create, get, list, open, close };
 }
 
 export type ElectionService = ReturnType<typeof createElectionService>;

@@ -108,6 +108,20 @@ describe('POST /admin/elections', () => {
   });
 });
 
+describe('GET /elections', () => {
+  it('lists elections publicly, newest first', async () => {
+    const first = await createElection(t, clock.now(), { name: 'Primeira' });
+    clock.advance(1_000);
+    const second = await createElection(t, clock.now(), { name: 'Segunda' });
+    const response = await t.app.inject({ method: 'GET', url: '/elections' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ elections: { id: string }[] }>().elections.map((e) => e.id)).toEqual([
+      second.id,
+      first.id,
+    ]);
+  });
+});
+
 describe('GET /elections/:id', () => {
   it('returns the election publicly (no admin token)', async () => {
     const election = await createElection(t, clock.now());
