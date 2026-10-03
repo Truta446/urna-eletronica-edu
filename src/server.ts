@@ -3,7 +3,7 @@ import { loadEnv } from './config/env.js';
 import { createPrismaClient } from './database/client.js';
 
 const env = loadEnv();
-const prisma = createPrismaClient(env.DATABASE_URL);
+const prisma = createPrismaClient(env.DATABASE_URL, env.DATABASE_POOL_SIZE);
 const app = await buildApp({ env, prisma });
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {

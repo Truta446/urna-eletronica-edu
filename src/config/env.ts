@@ -12,6 +12,8 @@ const envSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    /** Conexões no pool (mesma variável e mesmo padrão do backend em Rust). */
+    DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(200).default(10),
     ADMIN_CREDENTIALS: operatorCredentialsSchema,
     POLL_WORKER_CREDENTIALS: operatorCredentialsSchema,
     VOTING_SESSION_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),

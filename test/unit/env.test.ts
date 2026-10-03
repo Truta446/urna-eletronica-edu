@@ -24,6 +24,7 @@ describe('loadEnv', () => {
       PORT: 3000,
       LOG_LEVEL: 'info',
       DATABASE_URL: validEnv.DATABASE_URL,
+      DATABASE_POOL_SIZE: 10,
       ADMIN_CREDENTIALS: [{ label: 'alice', tokenHash: Buffer.from(HASH, 'hex') }],
       POLL_WORKER_CREDENTIALS: [{ label: 'mesario', tokenHash: Buffer.from(POLL_HASH, 'hex') }],
       VOTER_ID_PEPPER: PEPPER,
