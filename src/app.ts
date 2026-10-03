@@ -2,13 +2,21 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
 import type { PrismaClient } from './database/client.js';
+import { createCandidateService } from './modules/candidate/application/candidate.service.js';
+import { registerCandidateRoutes } from './modules/candidate/http/candidate.routes.js';
+import { createElectionService } from './modules/election/application/election.service.js';
+import { registerElectionRoutes } from './modules/election/http/election.routes.js';
 import { registerHealthRoutes } from './modules/health/health.routes.js';
+import { systemClock, type Clock } from './shared/clock.js';
 import { registerErrorHandling } from './shared/errors/error-handler.js';
+import { requireAdmin } from './shared/http/admin-auth.js';
 import { buildLoggerOptions } from './shared/logging/logger.js';
 
 export interface AppDependencies {
-  env: Pick<Env, 'LOG_LEVEL' | 'NODE_ENV'>;
+  env: Pick<Env, 'LOG_LEVEL' | 'NODE_ENV' | 'ADMIN_CREDENTIALS'>;
   prisma: PrismaClient;
+  /** Injetável para que testes controlem o tempo (abrir/fechar eleições). */
+  clock?: Clock;
   /** Destino alternativo dos logs; usado pelos testes para inspecionar o que é logado. */
   logStream?: NodeJS.WritableStream;
 }
@@ -31,8 +39,21 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     trustProxy: false,
   });
 
+  const { prisma, clock = systemClock } = deps;
+  const adminOnly = requireAdmin(deps.env.ADMIN_CREDENTIALS);
+
+  // A API só fala JSON: qualquer outro content-type com body vira 415.
+  app.removeContentTypeParser('text/plain');
   registerErrorHandling(app);
-  registerHealthRoutes(app, deps.prisma);
+  registerHealthRoutes(app, prisma);
+  registerElectionRoutes(app, {
+    elections: createElectionService({ prisma, clock }),
+    requireAdmin: adminOnly,
+  });
+  registerCandidateRoutes(app, {
+    candidates: createCandidateService({ prisma }),
+    requireAdmin: adminOnly,
+  });
 
   return app;
 }
