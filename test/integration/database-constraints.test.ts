@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { inspectDatabaseError, SqlState } from '../../src/database/errors.js';
 import { canTransition, type ElectionStatus } from '../../src/modules/election/domain/election.js';
@@ -370,12 +370,28 @@ describe('voting_sessions table', () => {
     expect(state).toBe(SqlState.SESSION_IMMUTABLE);
   });
 
-  it('allows consumed false -> true while OPEN, and never back', async () => {
-    const { session } = await authorizedSession();
-    const consume = (consumed: boolean) =>
-      sqlStateOf(t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed } }));
-    expect(await consume(true)).toBeUndefined();
-    expect(await consume(false)).toBe(SqlState.SESSION_IMMUTABLE);
+  it('allows consumed false -> true while OPEN (paired with a ballot), and never back', async () => {
+    const { election, session } = await authorizedSession();
+    const consumedWithBallot = sqlStateOf(
+      t.prisma.$transaction([
+        t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: true } }),
+        t.prisma.ballot.create({
+          data: {
+            id: randomUUID(),
+            electionId: election.id,
+            kind: 'BLANK',
+            nullifier: hash(),
+            commitment: hash(),
+          },
+        }),
+      ]),
+    );
+    expect(await consumedWithBallot).toBeUndefined();
+    expect(
+      await sqlStateOf(
+        t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: false } }),
+      ),
+    ).toBe(SqlState.SESSION_IMMUTABLE);
   });
 
   it('trigger rejects consuming after the election is CLOSED', async () => {
@@ -391,5 +407,136 @@ describe('voting_sessions table', () => {
     const { session } = await authorizedSession();
     const state = await sqlStateOf(t.prisma.votingSession.delete({ where: { id: session.id } }));
     expect(state).toBe(SqlState.SESSION_IMMUTABLE);
+  });
+});
+
+describe('ballots table', () => {
+  const bytes = () => randomBytes(32);
+
+  /** Monta o cenário legítimo pelo caminho legal: DRAFT -> eleitor -> OPEN -> habilita -> sessão. */
+  async function readyToVote() {
+    const election = await insertElection('DRAFT');
+    const candidate = await t.prisma.candidate.create({
+      data: { electionId: election.id, number: 7, name: 'C' },
+    });
+    const voter = await t.prisma.voter.create({
+      data: { electionId: election.id, identifierHmac: bytes() },
+    });
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'OPEN' } });
+    const [, session] = await t.prisma.$transaction([
+      t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: bytes(), expiresAt: future(1) },
+      }),
+    ]);
+    return { election, candidate, session };
+  }
+
+  /** Consome a sessão e insere o voto na mesma transação (o caminho legal). */
+  function castDirect(
+    electionId: string,
+    sessionId: string,
+    ballot: { kind: 'CANDIDATE' | 'BLANK' | 'NULL_VOTE'; candidateId?: string | null },
+  ) {
+    return t.prisma.$transaction([
+      t.prisma.votingSession.update({ where: { id: sessionId }, data: { consumed: true } }),
+      t.prisma.ballot.create({
+        data: {
+          id: randomUUID(),
+          electionId,
+          kind: ballot.kind,
+          candidateId: ballot.candidateId ?? null,
+          nullifier: bytes(),
+          commitment: bytes(),
+        },
+      }),
+    ]);
+  }
+
+  it('accepts consume + insert in the same transaction', async () => {
+    const { election, candidate, session } = await readyToVote();
+    expect(
+      await sqlStateOf(
+        castDirect(election.id, session.id, { kind: 'CANDIDATE', candidateId: candidate.id }),
+      ),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    ['CANDIDATE without candidate_id', { kind: 'CANDIDATE' as const, candidateId: null }],
+    ['BLANK pointing to a candidate', { kind: 'BLANK' as const, candidateId: 'CANDIDATE' }],
+  ])('CHECK rejects %s', async (_label, ballot) => {
+    const { election, candidate, session } = await readyToVote();
+    const candidateId = ballot.candidateId === 'CANDIDATE' ? candidate.id : null;
+    const state = await sqlStateOf(
+      castDirect(election.id, session.id, { kind: ballot.kind, candidateId }),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+
+  it('composite FK rejects a candidate from another election', async () => {
+    const { election, session } = await readyToVote();
+    const other = await insertElection('DRAFT');
+    const foreign = await t.prisma.candidate.create({
+      data: { electionId: other.id, number: 7, name: 'Outsider' },
+    });
+    const state = await sqlStateOf(
+      castDirect(election.id, session.id, { kind: 'CANDIDATE', candidateId: foreign.id }),
+    );
+    expect(state).toBe('23503');
+  });
+
+  it('BALANCE: rejects consuming a session without storing a ballot', async () => {
+    const { session } = await readyToVote();
+    const state = await sqlStateOf(
+      t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: true } }),
+    );
+    expect(state).toBe(SqlState.BALLOT_UNBALANCED);
+  });
+
+  it('trigger rejects updating a ballot (changing the vote)', async () => {
+    const { election, candidate, session } = await readyToVote();
+    await castDirect(election.id, session.id, { kind: 'CANDIDATE', candidateId: candidate.id });
+    const state = await sqlStateOf(
+      t.prisma.ballot.updateMany({ data: { kind: 'BLANK', candidateId: null } }),
+    );
+    expect(state).toBe(SqlState.BALLOT_IMMUTABLE);
+  });
+
+  it('trigger rejects deleting a ballot', async () => {
+    const { election, session } = await readyToVote();
+    await castDirect(election.id, session.id, { kind: 'BLANK' });
+    expect(await sqlStateOf(t.prisma.ballot.deleteMany({}))).toBe(SqlState.BALLOT_IMMUTABLE);
+    expect(await t.prisma.ballot.count()).toBe(1);
+  });
+
+  it('trigger rejects ballots after the election is CLOSED', async () => {
+    const { election, session } = await readyToVote();
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'CLOSED' } });
+    const state = await sqlStateOf(castDirect(election.id, session.id, { kind: 'BLANK' }));
+    expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
+  });
+
+  it.each([
+    ['nullifier', { nullifier: Buffer.from('short') }],
+    ['commitment', { commitment: Buffer.from('short') }],
+  ])('CHECK rejects a %s that is not 32 bytes', async (_label, override) => {
+    const { election, session } = await readyToVote();
+    const state = await sqlStateOf(
+      t.prisma.$transaction([
+        t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: true } }),
+        t.prisma.ballot.create({
+          data: {
+            id: randomUUID(),
+            electionId: election.id,
+            kind: 'BLANK',
+            nullifier: bytes(),
+            commitment: bytes(),
+            ...override,
+          },
+        }),
+      ]),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
   });
 });

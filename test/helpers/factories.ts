@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
 import type { TestApp } from './test-app.js';
 import { adminHeaders, pollWorkerHeaders } from './test-app.js';
@@ -98,6 +99,44 @@ export async function createVotingElection(
   expect((await openElection(t, election.id)).statusCode).toBe(200);
   clock.set(new Date(election.startsAt));
   return { election, cpfs };
+}
+
+export type ChoicePayload =
+  { type: 'candidate'; number: number } | { type: 'blank' } | { type: 'null' };
+
+export interface CastOptions {
+  token: string;
+  electionId: string;
+  choice?: ChoicePayload;
+  idempotencyKey?: string;
+}
+
+export async function castBallot({ app }: TestApp, options: CastOptions) {
+  return app.inject({
+    method: 'POST',
+    url: '/ballots',
+    headers: {
+      authorization: `Bearer ${options.token}`,
+      'idempotency-key': options.idempotencyKey ?? randomUUID(),
+    },
+    payload: { electionId: options.electionId, choice: options.choice ?? { type: 'blank' } },
+  });
+}
+
+/** Eleição aberta com `voters` eleitores já habilitados; devolve um token por eleitor. */
+export async function createElectionWithTokens(
+  t: TestApp,
+  clock: FakeClock,
+  options: { voters?: number; candidates?: number[] } = {},
+): Promise<{ election: ElectionBody; tokens: string[] }> {
+  const { election, cpfs } = await createVotingElection(t, clock, options);
+  const tokens: string[] = [];
+  for (const cpf of cpfs) {
+    const response = await authorizeVoter(t, election.id, cpf);
+    expect(response.statusCode).toBe(201);
+    tokens.push(response.json<{ token: string }>().token);
+  }
+  return { election, tokens };
 }
 
 export async function openElection({ app }: TestApp, electionId: string) {
