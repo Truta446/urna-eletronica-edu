@@ -22,15 +22,17 @@ enum ElectionStatus {
 
 /// Transições e congelamento de campos são garantidos por trigger (ver migration).
 model Election {
-  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name           String
-  status         ElectionStatus  @default(DRAFT)
-  startsAt       DateTime        @map("starts_at") @db.Timestamptz(3)
-  endsAt         DateTime        @map("ends_at") @db.Timestamptz(3)
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  status         ElectionStatus      @default(DRAFT)
+  startsAt       DateTime            @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime            @map("ends_at") @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   candidates     Candidate[]
   voters         Voter[]
   votingSessions VotingSession[]
+  ballots        Ballot[]
+  idempotency    IdempotencyRecord[]
 
   @@map("elections")
 }
@@ -42,6 +44,7 @@ model Candidate {
   number     Int
   name       String
   election   Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ballots    Ballot[]
 
   @@unique([electionId, number])
   /// Alvo da FK composta de ballots: garante que o candidato votado pertence à mesma eleição.
@@ -76,4 +79,45 @@ model VotingSession {
 
   @@index([electionId])
   @@map("voting_sessions")
+}
+
+enum BallotKind {
+  CANDIDATE
+  BLANK
+  NULL_VOTE
+
+  @@map("ballot_kind")
+}
+
+/// A urna. Append-only (trigger). Deliberadamente SEM voter_id, SEM session_id e SEM created_at.
+/// O id é UUID v4 gerado na aplicação (entra no commitment); nunca v7, que embute horário.
+model Ballot {
+  id          String     @id @db.Uuid
+  electionId  String     @map("election_id") @db.Uuid
+  kind        BallotKind
+  candidateId String?    @map("candidate_id") @db.Uuid
+  /// SHA-256 do token com separação de domínio: um token, no máximo um voto.
+  nullifier   Bytes      @unique
+  /// SHA-256 do conteúdo canônico do voto; folha da Merkle root na apuração.
+  commitment  Bytes      @unique
+  election    Election   @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// FK composta: o candidato votado pertence à MESMA eleição do voto.
+  candidate   Candidate? @relation(fields: [electionId, candidateId], references: [electionId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([electionId])
+  @@map("ballots")
+}
+
+/// Respostas já dadas a POST /ballots, para retries. Apagadas no fechamento da eleição.
+/// scope_key e request_fingerprint são HMACs com o token como chave: sem o token, não revelam nada.
+model IdempotencyRecord {
+  scopeKey           Bytes    @id @map("scope_key")
+  electionId         String   @map("election_id") @db.Uuid
+  requestFingerprint Bytes    @map("request_fingerprint")
+  responseStatus     Int      @map("response_status")
+  responseBody       Json     @map("response_body")
+  election           Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([electionId])
+  @@map("idempotency_records")
 }

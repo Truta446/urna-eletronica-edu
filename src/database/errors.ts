@@ -13,6 +13,8 @@ export const SqlState = {
   ELECTION_NOT_OPEN: 'UE005',
   SESSION_IMMUTABLE: 'UE006',
   AUTHORIZATION_UNBALANCED: 'UE007',
+  BALLOT_IMMUTABLE: 'UE008',
+  BALLOT_UNBALANCED: 'UE009',
 } as const;
 
 const driverCauseSchema = z.object({
@@ -61,6 +63,8 @@ export function mapDatabaseError(error: unknown): AppError | undefined {
       return new ConflictError('Voter record cannot be changed this way');
     case SqlState.SESSION_IMMUTABLE:
       return new ConflictError('Voting session cannot be changed this way');
+    case SqlState.BALLOT_IMMUTABLE:
+      return new ConflictError('Ballots cannot be changed');
     default:
       return undefined;
   }
