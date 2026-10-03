@@ -22,14 +22,15 @@ enum ElectionStatus {
 
 /// Transições e congelamento de campos são garantidos por trigger (ver migration).
 model Election {
-  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String
-  status     ElectionStatus @default(DRAFT)
-  startsAt   DateTime       @map("starts_at") @db.Timestamptz(3)
-  endsAt     DateTime       @map("ends_at") @db.Timestamptz(3)
-  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  candidates Candidate[]
-  voters     Voter[]
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  status         ElectionStatus  @default(DRAFT)
+  startsAt       DateTime        @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime        @map("ends_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  candidates     Candidate[]
+  voters         Voter[]
+  votingSessions VotingSession[]
 
   @@map("elections")
 }
@@ -60,4 +61,19 @@ model Voter {
 
   @@unique([electionId, identifierHmac])
   @@map("voters")
+}
+
+/// Autorização de voto de uso único. Deliberadamente SEM voter_id e SEM created_at:
+/// nada aqui aponta para quem foi habilitado (ver docs/threat-model.md, T07).
+/// O token em claro nunca é armazenado; só o SHA-256 dele.
+model VotingSession {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  electionId String   @map("election_id") @db.Uuid
+  tokenHash  Bytes    @unique @map("token_hash")
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  consumed   Boolean  @default(false)
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([electionId])
+  @@map("voting_sessions")
 }
