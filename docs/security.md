@@ -252,9 +252,8 @@ voto. O handler de 500 loga erros do Prisma só com `name`, código Prisma e SQL
 | Content-type        | só `application/json`                          | Parser de `text/plain` removido; outros tipos dão `415`                    |
 | Bodies              | `z.strictObject`                               | Campos desconhecidos (`status`, `id`) dão `400`: sem mass assignment       |
 
-## Pendências (fases futuras)
+## Menor privilégio e hardening (Fase 9 — implementado)
 
-- Roles do PostgreSQL com menor privilégio (app sem `UPDATE`/`DELETE` em `ballots` e `audit_events`) — Fase 5/9
-- Rate limiting — Fase 9
-- Headers de segurança HTTP — Fase 9
-- Autenticação de mesários — Fase 4
+Ver [hardening-review.md](hardening-review.md): role `urna_app` sem `UPDATE`/`DELETE` em votos e
+auditoria, rate limiting, headers defensivos, timeout de requisição, rotas sensíveis sem log de
+acesso e checagens que impedem configuração de desenvolvimento em produção.
