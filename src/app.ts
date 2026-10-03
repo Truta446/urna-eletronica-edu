@@ -4,6 +4,8 @@ import type { Env } from './config/env.js';
 import type { PrismaClient } from './database/client.js';
 import { createAuthorizationService } from './modules/authorization/application/authorization.service.js';
 import { registerAuthorizationRoutes } from './modules/authorization/http/authorization.routes.js';
+import { createBallotService } from './modules/ballot-box/application/ballot.service.js';
+import { registerBallotRoutes } from './modules/ballot-box/http/ballot.routes.js';
 import { createCandidateService } from './modules/candidate/application/candidate.service.js';
 import { registerCandidateRoutes } from './modules/candidate/http/candidate.routes.js';
 import { createElectionService } from './modules/election/application/election.service.js';
@@ -82,6 +84,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     }),
     requirePollWorker: pollWorkerOnly,
   });
+  registerBallotRoutes(app, { ballots: createBallotService({ prisma, clock }) });
 
   return app;
 }

@@ -68,13 +68,21 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
     throw new BusinessRuleError('Election needs at least one candidate and one voter to open');
   }
 
-  /** Só depois de endsAt: um administrador não pode encerrar a votação antes da hora. */
+  /**
+   * Só depois de endsAt: um administrador não pode encerrar a votação antes da hora.
+   * Na mesma transação, apaga os registros de idempotência: depois do fechamento não há
+   * retry possível, e eles são a única tabela que guarda respostas ligadas a tokens.
+   */
   async function close(id: string): Promise<Election> {
     const now = clock.now();
-    const [closed] = await prisma.election.updateManyAndReturn({
-      where: { id, status: 'OPEN', endsAt: { lte: now } },
-      data: { status: 'CLOSED' },
-      select: electionSelect,
+    const closed = await prisma.$transaction(async (tx) => {
+      const [updated] = await tx.election.updateManyAndReturn({
+        where: { id, status: 'OPEN', endsAt: { lte: now } },
+        data: { status: 'CLOSED' },
+        select: electionSelect,
+      });
+      if (updated) await tx.idempotencyRecord.deleteMany({ where: { electionId: id } });
+      return updated;
     });
     if (closed) return closed;
 
