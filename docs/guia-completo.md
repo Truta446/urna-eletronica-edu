@@ -521,6 +521,25 @@ Nem tudo saiu certo na primeira tentativa. Estes casos ensinam tanto quanto o c�
 
 ---
 
+## 9½. O front de estudo (`web/`)
+
+Uma interface para **sentir** cada papel, construída depois das fases (Vite + React, só 14 pacotes em produção):
+
+- **Administração:** cria a eleição e faz a **cerimônia de chaves no navegador** (a chave privada é
+  gerada e dividida aqui, e só a pública vai ao servidor). Mostra o ciclo de vida em etapas; o
+  encerramento só libera depois do horário.
+- **Mesário:** terminal estreito que habilita o eleitor e "libera a urna" por `BroadcastChannel`, como o
+  cabo entre terminal e urna. O token nunca aparece na URL nem fica salvo no navegador.
+- **Urna:** reproduz a urna real: número, nome do candidato, NÚMERO ERRADO/VOTO NULO, BRANCO só antes de
+  digitar, CORRIGE, CONFIRMA, FIM com som. Funciona pelo teclado e anuncia cada estado para leitores de tela.
+- **Boletim de urna:** resultado publicado, com **verificação independente no navegador**: uma segunda
+  implementação, escrita do zero com WebCrypto (`web/src/lib/verify.ts`), sem código do backend. Um teste
+  (`test/integration/web-verifier.test.ts`) exige que as duas implementações concordem em eleições v1 e v2.
+
+Segurança do front: tokens só na memória da aba (sem `localStorage`), sem `dangerouslySetInnerHTML`, API
+pelo proxy do Vite (mesma origem, sem CORS no backend), fontes servidas localmente (nenhuma requisição a
+terceiros). Para produção faltaria servir o HTML com CSP própria.
+
 ## 10. Como ler o código
 
 Ordem sugerida (do mais simples ao mais denso):

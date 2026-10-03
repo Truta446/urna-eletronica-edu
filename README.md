@@ -42,6 +42,31 @@ integridade, voto secreto, auditabilidade, criptografia e concorrência.
 > com os conceitos, as decisões, os erros encontrados no caminho e o que o sistema não garante.
 > Para ver tudo funcionando em segundos: `npm run demo`.
 
+## 🖥️ Experimente pelo navegador
+
+<p align="center">
+  <img src=".github/assets/screenshots/urna-votando.png" alt="Urna no navegador: número 13 digitado, nome do candidato na tela e teclas BRANCO, CORRIGE e CONFIRMA" width="100%" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src=".github/assets/screenshots/mesario.png" alt="Terminal do mesário liberando a urna para um eleitor" /></td>
+    <td width="50%"><img src=".github/assets/screenshots/boletim.png" alt="Boletim de urna com o resultado e a verificação feita no navegador" /></td>
+  </tr>
+  <tr>
+    <td><b>Terminal do mesário</b>: confere o CPF e libera a urna, que está em outra aba.</td>
+    <td><b>Boletim de urna</b>: resultado assinado, verificado de forma independente pelo próprio navegador.</td>
+  </tr>
+</table>
+
+```bash
+npm run dev        # API em :3000
+npm run web        # front em http://127.0.0.1:5173
+```
+
+Abra **Administração**, **Mesário** e **Urna** em abas diferentes. O mesário libera a urna pela outra aba,
+como o cabo que liga o terminal à urna numa seção eleitoral.
+
 ## 🗳️ Por que este projeto
 
 Votar parece simples: _uma pessoa, um voto, contar no final._ Mas basta tentar implementar para que as
@@ -278,6 +303,8 @@ curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 | `npm run verify:result -- <url> <id>`          | Verifica um resultado publicado, sem acesso ao banco                                          |
 | `npm run trustees:keygen -- <partes> <limiar>` | Par HPKE da eleição + partes Shamir da chave privada                                          |
 | `npm run bench -- 1000 10000 50000`            | Benchmark de habilitação, voto, lacre e apuração                                              |
+| `npm run web`                                  | Front de estudo em http://127.0.0.1:5173 (com a API rodando)                                  |
+| `npm run web:e2e`                              | Eleição cifrada inteira pela interface (Playwright)                                           |
 
 ### Experimentando a API
 
