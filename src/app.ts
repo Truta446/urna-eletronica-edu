@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
 import type { PrismaClient } from './database/client.js';
@@ -20,7 +21,9 @@ import { createVoterIdentifierHasher } from './security/voter-identifier.js';
 import { createTallyService } from './modules/tally/application/tally.service.js';
 import { registerTallyRoutes } from './modules/tally/http/tally.routes.js';
 import { systemClock, type Clock } from './shared/clock.js';
+import { AppError } from './shared/errors/app-error.js';
 import { registerErrorHandling } from './shared/errors/error-handler.js';
+import { registerSecurityHeaders } from './shared/http/security-headers.js';
 import { requireOperator } from './shared/http/operator-auth.js';
 import { buildLoggerOptions } from './shared/logging/logger.js';
 
@@ -34,6 +37,7 @@ export interface AppDependencies {
     | 'VOTER_ID_PEPPER'
     | 'VOTING_SESSION_TTL_SECONDS'
     | 'SIGNING_PRIVATE_KEY'
+    | 'RATE_LIMIT_PER_MINUTE'
   >;
   prisma: PrismaClient;
   /** Injetável para que testes controlem o tempo (abrir/fechar eleições). */
@@ -48,7 +52,7 @@ const BODY_LIMIT_BYTES = 16 * 1024;
  * Monta a aplicação sem abrir porta. Quem cria as dependências (server.ts ou testes)
  * é responsável por encerrá-las.
  */
-export function buildApp(deps: AppDependencies): FastifyInstance {
+export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> {
   const loggerOptions = buildLoggerOptions(deps.env);
 
   const app = Fastify({
@@ -58,6 +62,8 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     requestIdHeader: false,
     genReqId: () => randomUUID(),
     trustProxy: false,
+    // Sem isto, uma conexão que manda o corpo byte a byte (slowloris) fica aberta para sempre.
+    requestTimeout: 15_000,
   });
 
   const { prisma, clock = systemClock } = deps;
@@ -69,6 +75,16 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // A API só fala JSON: qualquer outro content-type com body vira 415.
   app.removeContentTypeParser('text/plain');
   registerErrorHandling(app);
+  registerSecurityHeaders(app);
+  if (deps.env.RATE_LIMIT_PER_MINUTE > 0) {
+    // Por IP, em memória (uma instância). Atrás de proxy, exigiria trustProxy configurado:
+    // senão todos os clientes viram "o IP do proxy" e o limite vira DoS. Os IPs não são logados.
+    await app.register(rateLimit, {
+      max: deps.env.RATE_LIMIT_PER_MINUTE,
+      timeWindow: 60_000,
+      errorResponseBuilder: () => new AppError('RATE_LIMITED', 429, 'Too many requests'),
+    });
+  }
   registerHealthRoutes(app, prisma);
   registerElectionRoutes(app, {
     elections: createElectionService({ prisma, clock, signer }),

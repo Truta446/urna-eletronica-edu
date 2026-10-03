@@ -32,23 +32,29 @@ function requireVotingToken(request: FastifyRequest): Promise<void> {
 }
 
 export function registerBallotRoutes(app: FastifyInstance, deps: { ballots: BallotService }): void {
-  app.post('/ballots', { onRequest: requireVotingToken }, async (request, reply) => {
-    const token = request.votingToken;
-    if (!token) throw new UnauthorizedError('Invalid or expired voting token');
-    const headers = idempotencyHeaders.parse(request.headers);
-    const body = castBallotBody.parse(request.body);
+  // logLevel 'warn': sem log de acesso por voto. Horário de habilitação + horário do voto nos
+  // logs permitiria correlacionar eleitor e voto (T16). Erros continuam sendo logados.
+  app.post(
+    '/ballots',
+    { onRequest: requireVotingToken, logLevel: 'warn' },
+    async (request, reply) => {
+      const token = request.votingToken;
+      if (!token) throw new UnauthorizedError('Invalid or expired voting token');
+      const headers = idempotencyHeaders.parse(request.headers);
+      const body = castBallotBody.parse(request.body);
 
-    const result = await deps.ballots.cast({
-      token,
-      idempotencyKey: headers['idempotency-key'],
-      electionId: body.electionId,
-      choice: body.choice,
-    });
+      const result = await deps.ballots.cast({
+        token,
+        idempotencyKey: headers['idempotency-key'],
+        electionId: body.electionId,
+        choice: body.choice,
+      });
 
-    return reply
-      .status(result.status)
-      .header('cache-control', 'no-store')
-      .header('idempotent-replayed', String(result.replayed))
-      .send(result.body);
-  });
+      return reply
+        .status(result.status)
+        .header('cache-control', 'no-store')
+        .header('idempotent-replayed', String(result.replayed))
+        .send(result.body);
+    },
+  );
 }

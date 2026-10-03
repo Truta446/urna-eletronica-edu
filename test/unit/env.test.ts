@@ -28,6 +28,7 @@ describe('loadEnv', () => {
       POLL_WORKER_CREDENTIALS: [{ label: 'mesario', tokenHash: Buffer.from(POLL_HASH, 'hex') }],
       VOTER_ID_PEPPER: PEPPER,
       VOTING_SESSION_TTL_SECONDS: 300,
+      RATE_LIMIT_PER_MINUTE: 300,
     });
   });
 
@@ -111,5 +112,32 @@ describe('loadEnv', () => {
       expect(String(error)).toContain('DATABASE_URL');
       expect(String(error)).not.toContain(secret);
     }
+  });
+
+  describe('production', () => {
+    const prod = {
+      ...validEnv,
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://urna_app:p@db/urna',
+      ADMIN_CREDENTIALS: `ops-alice:${HASH}`,
+      POLL_WORKER_CREDENTIALS: `mesario-1:${POLL_HASH}`,
+    };
+
+    it('accepts a production-grade configuration', () => {
+      expect(() => loadEnv(prod)).not.toThrow();
+    });
+
+    it.each([
+      ['dev-* credentials', { ADMIN_CREDENTIALS: `dev-admin:${HASH}` }, 'ADMIN_CREDENTIALS'],
+      ['verbose logging', { LOG_LEVEL: 'debug' }, 'LOG_LEVEL'],
+      ['rate limit disabled', { RATE_LIMIT_PER_MINUTE: '0' }, 'RATE_LIMIT_PER_MINUTE'],
+      [
+        'a privileged database role',
+        { DATABASE_URL: 'postgresql://postgres:p@db/urna' },
+        'DATABASE_URL',
+      ],
+    ])('rejects %s', (_label, override, variable) => {
+      expect(() => loadEnv({ ...prod, ...override })).toThrow(variable);
+    });
   });
 });

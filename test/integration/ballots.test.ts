@@ -67,7 +67,8 @@ describe('POST /ballots — happy path', () => {
     t.logs.length = 0; // só os logs da chamada de voto
     await castBallot(t, { token, electionId, choice: { type: 'candidate', number: 20 } });
     const logs = JSON.stringify(t.logs);
-    expect(logs).toContain('/ballots'); // garante que houve log a inspecionar
+    // Desde a Fase 9, a rota nem gera log de acesso (logLevel 'warn'); ver hardening.test.ts.
+    expect(logs).not.toContain('/ballots');
     expect(logs).not.toContain(token);
     expect(logs).not.toContain('candidate');
   });

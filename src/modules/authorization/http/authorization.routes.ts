@@ -15,7 +15,7 @@ export function registerAuthorizationRoutes(
 
   app.post(
     '/elections/:id/voting-sessions',
-    { onRequest: requirePollWorker },
+    { onRequest: requirePollWorker, logLevel: 'warn' },
     async (request, reply) => {
       const { id } = electionIdParams.parse(request.params);
       const body = authorizeVoterBody.parse(request.body);

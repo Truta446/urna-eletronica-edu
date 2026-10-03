@@ -2,7 +2,7 @@
   "name": "urna-eletronica-edu",
   "version": "0.1.0",
   "private": true,
-  "description": "Prot\u00f3tipo educacional de backend de urna eletr\u00f4nica. N\u00e3o use em elei\u00e7\u00f5es reais.",
+  "description": "Protótipo educacional de backend de urna eletrônica. Não use em eleições reais.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -17,7 +17,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "prisma migrate deploy && tsx scripts/setup-app-role.ts",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
@@ -28,6 +28,7 @@
     "trustees:keygen": "tsx scripts/trustees-keygen.ts"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
     "@hpke/core": "^1.9.0",
     "@hpke/dhkem-x25519": "^1.8.0",
     "@prisma/adapter-pg": "^7.10.0",

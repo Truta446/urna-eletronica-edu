@@ -7,6 +7,7 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'BUSINESS_RULE_VIOLATION'
   | 'INTEGRITY_FAILURE'
+  | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
 
 /**

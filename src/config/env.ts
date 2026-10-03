@@ -17,8 +17,45 @@ const envSchema = z
     VOTING_SESSION_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
     VOTER_ID_PEPPER: pepperSchema,
     SIGNING_PRIVATE_KEY: signingKeySchema,
+    /** Requisições por minuto por IP. 0 desliga (só para testes). */
+    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).max(100_000).default(300),
   })
   .superRefine((env, ctx) => {
+    // Produção não aceita configurações de desenvolvimento.
+    if (env.NODE_ENV === 'production') {
+      const devLabels = [...env.ADMIN_CREDENTIALS, ...env.POLL_WORKER_CREDENTIALS].filter((c) =>
+        c.label.startsWith('dev-'),
+      );
+      if (devLabels.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['ADMIN_CREDENTIALS'],
+          message: 'dev-* credentials in production',
+        });
+      }
+      if (env.LOG_LEVEL === 'debug' || env.LOG_LEVEL === 'trace') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['LOG_LEVEL'],
+          message: 'Verbose logging in production',
+        });
+      }
+      if (env.RATE_LIMIT_PER_MINUTE === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['RATE_LIMIT_PER_MINUTE'],
+          message: 'Rate limit disabled in production',
+        });
+      }
+      if (new URL(env.DATABASE_URL).username !== 'urna_app') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['DATABASE_URL'],
+          message: 'Must use the least-privilege role',
+        });
+      }
+    }
+
     // Separação de funções: um mesmo token não pode valer como admin E como mesário.
     const adminHashes = new Set(env.ADMIN_CREDENTIALS.map((c) => c.tokenHash.toString('hex')));
     if (env.POLL_WORKER_CREDENTIALS.some((c) => adminHashes.has(c.tokenHash.toString('hex')))) {
