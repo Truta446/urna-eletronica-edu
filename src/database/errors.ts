@@ -15,6 +15,8 @@ export const SqlState = {
   AUTHORIZATION_UNBALANCED: 'UE007',
   BALLOT_IMMUTABLE: 'UE008',
   BALLOT_UNBALANCED: 'UE009',
+  AUDIT_IMMUTABLE: 'UE010',
+  AUDIT_CHAIN_BROKEN: 'UE011',
 } as const;
 
 const driverCauseSchema = z.object({

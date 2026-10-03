@@ -33,6 +33,7 @@ model Election {
   votingSessions VotingSession[]
   ballots        Ballot[]
   idempotency    IdempotencyRecord[]
+  auditEvents    AuditEvent[]
 
   @@map("elections")
 }
@@ -120,4 +121,45 @@ model IdempotencyRecord {
 
   @@index([electionId])
   @@map("idempotency_records")
+}
+
+enum AuditEventType {
+  ELECTION_CREATED
+  CANDIDATE_CREATED
+  VOTER_REGISTERED
+  ELECTION_OPENED
+  VOTER_AUTHORIZED
+  ELECTION_CLOSED
+  BALLOT_BOX_SEALED
+  TALLY_STARTED
+  TALLY_COMPLETED
+
+  @@map("audit_event_type")
+}
+
+enum AuditActorType {
+  ADMIN
+  POLL_WORKER
+  SYSTEM
+
+  @@map("audit_actor_type")
+}
+
+/// Log append-only em hash chain. Cada evento guarda o hash do anterior; o banco exige o
+/// encadeamento no INSERT e proíbe UPDATE/DELETE. Nunca contém CPF, token ou escolha de voto.
+/// Não existe evento por voto (VOTE_ACCEPTED): correlação por horário (T16).
+model AuditEvent {
+  seq             Int            @id
+  eventType       AuditEventType @map("event_type")
+  actorType       AuditActorType @map("actor_type")
+  actorIdentifier String         @map("actor_identifier")
+  electionId      String?        @map("election_id") @db.Uuid
+  payload         Json
+  previousHash    Bytes          @map("previous_hash")
+  eventHash       Bytes          @unique @map("event_hash")
+  createdAt       DateTime       @map("created_at") @db.Timestamptz(3)
+  election        Election?      @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([electionId, seq])
+  @@map("audit_events")
 }
