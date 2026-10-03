@@ -206,12 +206,17 @@ test/
 
 ## Decisões registradas
 
-| Decisão                                 | Alternativa descartada   | Motivo                                                         |
-| --------------------------------------- | ------------------------ | -------------------------------------------------------------- |
-| Monólito modular                        | Microsserviços           | Complexidade sem ganho didático                                |
-| `has_voted` na habilitação              | Na gravação do voto      | Remove o vínculo eleitor ↔ voto no banco                       |
-| `READ COMMITTED` + `UPDATE` condicional | `SERIALIZABLE` em tudo   | Mesma garantia para este caso, sem retries                     |
-| Merkle root de commitments ordenados    | Hash chain de ballots    | Uma cadeia registra a ordem de chegada e ajuda a correlacionar |
-| Evento agregado `BALLOT_BOX_SEALED`     | `VOTE_ACCEPTED` por voto | Evita correlação por tempo no audit log                        |
-| Testes contra PostgreSQL real           | Mocks do banco           | Concorrência e constraints não se testam com mock              |
-| Prisma + SQL nas migrations             | Só Prisma                | O Prisma não expressa CHECK, triggers nem roles                |
+| Decisão                                      | Alternativa descartada    | Motivo                                                         |
+| -------------------------------------------- | ------------------------- | -------------------------------------------------------------- |
+| Monólito modular                             | Microsserviços            | Complexidade sem ganho didático                                |
+| `has_voted` na habilitação                   | Na gravação do voto       | Remove o vínculo eleitor ↔ voto no banco                       |
+| `READ COMMITTED` + `UPDATE` condicional      | `SERIALIZABLE` em tudo    | Mesma garantia para este caso, sem retries                     |
+| Merkle root de commitments ordenados         | Hash chain de ballots     | Uma cadeia registra a ordem de chegada e ajuda a correlacionar |
+| Evento agregado `BALLOT_BOX_SEALED`          | `VOTE_ACCEPTED` por voto  | Evita correlação por tempo no audit log                        |
+| Testes contra PostgreSQL real                | Mocks do banco            | Concorrência e constraints não se testam com mock              |
+| Transição de estado por `UPDATE` condicional | Ler, checar em TS, gravar | Sem janela TOCTOU; o banco serializa chamadas concorrentes     |
+| Regras de estado também em triggers          | Só no TypeScript          | Valem para qualquer acesso SQL, não só para a API              |
+| Trigger de candidatos com `FOR SHARE`        | Só checagem na aplicação  | Serializa inserção de candidato com abertura concorrente       |
+| `close` só depois de `endsAt`                | Admin fecha quando quiser | Impede encerrar a votação antes da hora                        |
+| Relógio injetado (`Clock`)                   | `new Date()` espalhado    | Testes de tempo sem `sleep`                                    |
+| Prisma + SQL nas migrations                  | Só Prisma                 | O Prisma não expressa CHECK, triggers nem roles                |

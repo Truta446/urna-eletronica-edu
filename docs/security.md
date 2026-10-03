@@ -97,6 +97,23 @@ Também implementado:
 
 Nunca logar: voto, conteúdo decifrado, token completo, segredos, chaves privadas, identificador do eleitor.
 
+## Credenciais de administrador (Fase 2 — implementado)
+
+- `ADMIN_CREDENTIALS=label:sha256hex,…`. A configuração **nunca** contém o token em si; um vazamento do `.env` não dá acesso.
+- `npm run admin:token -- <label>` gera token (256 bits) e a linha de configuração.
+- Comparação com `timingSafeEqual` contra **todas** as credenciais, sem sair no primeiro acerto.
+- Formato estrito `Authorization: Bearer <43 caracteres base64url>`; qualquer variação dá `401` idêntico.
+- A autenticação roda antes da validação do body, para não revelar o formato da API a quem não está autenticado.
+- O `label` será o `actorIdentifier` dos eventos de auditoria (Fase 6).
+- **Limitações:** sem rotação automática, sem expiração, sem MFA. Revogar = remover a linha e reiniciar.
+
+## Erros de banco nos logs (Fase 2 — implementado)
+
+Mensagens do PostgreSQL de violação de CHECK incluem `Failing row contains (…)`, ou seja, a linha
+inteira. Se um erro desses chegasse ao log como objeto completo, numa tabela de votos o log teria o
+voto. O handler de 500 loga erros do Prisma só com `name`, código Prisma e SQLSTATE.
+`test/integration/error-logging.test.ts` prova isso, e falha se a proteção for removida.
+
 ## Configuração segura (Fase 1 — implementado)
 
 | Item                | Valor                                          | Motivo                                                                     |
@@ -107,10 +124,12 @@ Nunca logar: voto, conteúdo decifrado, token completo, segredos, chaves privada
 | `trustProxy`        | `false`                                        | Não confiar em `X-Forwarded-*` sem proxy configurado                       |
 | Postgres no compose | `127.0.0.1:5440`                               | Não expor o banco na rede local                                            |
 | Testes              | recusam banco cujo nome não termina em `_test` | A suíte trunca tabelas                                                     |
+| Content-type        | só `application/json`                          | Parser de `text/plain` removido; outros tipos dão `415`                    |
+| Bodies              | `z.strictObject`                               | Campos desconhecidos (`status`, `id`) dão `400`: sem mass assignment       |
 
 ## Pendências (fases futuras)
 
 - Roles do PostgreSQL com menor privilégio (app sem `UPDATE`/`DELETE` em `ballots` e `audit_events`) — Fase 5/9
 - Rate limiting — Fase 9
 - Headers de segurança HTTP — Fase 9
-- Autenticação de administradores e mesários — Fases 2 e 4
+- Autenticação de mesários — Fase 4

@@ -27,8 +27,10 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 ```
 
 - `201` → `{ "id", "name", "status": "DRAFT", "startsAt", "endsAt", "createdAt" }`
-- `400` se `endsAt <= startsAt` (também garantido por `CHECK` no banco)
-- Auditoria: `ELECTION_CREATED`
+- `400` body inválido: campos desconhecidos (ex.: `status`, `id`), nome vazio, com caracteres de controle ou com mais de 200 caracteres, data sem fuso horário
+- `422` `endsAt <= startsAt` (também garantido por `CHECK` no banco), `startsAt` no passado, duração acima de 30 dias
+- `415` content-type diferente de JSON
+- Auditoria: `ELECTION_CREATED` (Fase 6)
 
 ### `POST /admin/elections/:id/candidates`
 
@@ -37,9 +39,11 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 ```
 
 - `201` → `{ "id", "electionId", "number", "name" }`
+- `400` número fora de `1..99999`, não inteiro ou enviado como string
+- `404` eleição inexistente
 - `409` se o número já existe na eleição (`UNIQUE (election_id, number)`)
-- `409` se a eleição não está em `DRAFT`
-- Auditoria: `CANDIDATE_CREATED`
+- `409` se a eleição não está em `DRAFT` (também garantido por trigger)
+- Auditoria: `CANDIDATE_CREATED` (Fase 6)
 
 ### `POST /admin/elections/:id/voters`
 
@@ -54,15 +58,17 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 
 ### Consultas públicas
 
-- `GET /elections/:id`
-- `GET /elections/:id/candidates`
+- `GET /elections/:id` → mesma forma da criação; `400` para id que não é UUID; `404` inexistente
+- `GET /elections/:id/candidates` → `{ "candidates": [...] }` ordenados por número
 
 ## 2. Abertura
 
 ### `POST /admin/elections/:id/open`
 
-- `DRAFT → OPEN`. Congela candidatos e eleitores.
-- Auditoria: `ELECTION_OPENED`
+- `DRAFT → OPEN`. Congela nome, janela de votação, candidatos e eleitores.
+- `409` se não está em `DRAFT`; `422` sem candidatos ou com a janela já encerrada
+- Feito com um único `UPDATE … WHERE status = 'DRAFT'`: chamadas concorrentes resultam em exatamente um sucesso.
+- Auditoria: `ELECTION_OPENED` (Fase 6)
 
 ## 3. Habilitação (mesário)
 
@@ -146,6 +152,8 @@ Os registros são apagados no fechamento da eleição.
 ### `POST /admin/elections/:id/close`
 
 - `OPEN → CLOSED`. Tokens pendentes deixam de valer.
+- **Só a partir de `endsAt`** (`422` antes disso): um administrador não consegue encerrar a votação mais cedo.
+- `409` se não está em `OPEN`
 - Calcula contagem e Merkle root dos commitments, assina e registra `BALLOT_BOX_SEALED`.
 - Apaga os registros de idempotência.
 - Auditoria: `ELECTION_CLOSED`
