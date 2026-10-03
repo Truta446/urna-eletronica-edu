@@ -303,6 +303,7 @@ curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 | `npm run verify:result -- <url> <id>`          | Verifica um resultado publicado, sem acesso ao banco                                          |
 | `npm run trustees:keygen -- <partes> <limiar>` | Par HPKE da eleição + partes Shamir da chave privada                                          |
 | `npm run bench -- 1000 10000 50000`            | Benchmark de habilitação, voto, lacre e apuração                                              |
+| `npm run bench:national -- 200 100 64 4`       | Muitas seções votando ao mesmo tempo, N processos da aplicação                                |
 | `npm run web`                                  | Front de estudo em http://127.0.0.1:5173 (com a API rodando)                                  |
 | `npm run web:e2e`                              | Eleição cifrada inteira pela interface (Playwright)                                           |
 

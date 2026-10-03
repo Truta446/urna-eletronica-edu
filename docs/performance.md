@@ -88,3 +88,59 @@ p95 de 56 ms para 19 ms.
 Para comparação: uma seção eleitoral brasileira tem algumas centenas de eleitores ao longo de 9 horas,
 menos de 1 voto por minuto. O gargalo aqui está em outra escala, mas o crescimento O(n²) da linha de
 base seria um problema real num serviço centralizado.
+
+## Escala nacional: 156 milhões de eleitores (rodada 3)
+
+**Pergunta:** o sistema aguentaria o Brasil? Rodar 156 milhões (ou 250 milhões) ao pé da letra
+num notebook não é viável: seriam centenas de GB de disco e dias de execução. A pergunta útil é
+outra: **onde fica o teto, e ele sobe quando se acrescenta hardware?**
+
+A eleição real não é um banco central: são ~470 mil **seções** independentes de algumas centenas de
+eleitores. O cenário medido é esse:
+
+```bash
+npm run bench:national -- 200 100 64 [processos]   # 200 seções × 100 eleitores, 64 requisições simultâneas
+```
+
+O script também amostra o PostgreSQL a cada 100 ms (`pg_stat_activity.wait_event`) para mostrar
+**onde** as conexões esperam.
+
+| Versão                                           | Vazão      | Onde as conexões esperavam                       | 156 mi de eleitores levariam |
+| ------------------------------------------------ | ---------- | ------------------------------------------------ | ---------------------------- |
+| Cadeia de auditoria **global**, 1 processo       | 323/s      | **6,5 de ~8 em `Lock:advisory`** (fila única)    | 134 h                        |
+| Cadeia **por eleição**, 1 processo               | ~490/s     | banco quase ocioso: o Node (1 núcleo) é o limite | 88 h                         |
+| Cadeia por eleição, **4 processos** da aplicação | ~930–956/s | `LWLock:WALWrite`: o disco do PostgreSQL         | ~45 h                        |
+| Cadeia por eleição, 8 processos                  | ~924/s     | idem: teto de **um** PostgreSQL neste notebook   | ~47 h                        |
+| 4 processos + group commit (`commit_delay`)      | ~894/s     | sem ganho; configuração revertida                | —                            |
+
+Uma eleição dura 9 h: a média nacional exigida é de **~4.800 eleitores/s**, com picos de 2 a 3 vezes isso.
+
+**O que mudou no código (rodada 3):** uma cadeia de auditoria **por eleição**, com advisory lock
+por eleição (migration `audit_chain_per_election`). Antes, todas as habilitações do país passavam
+por uma fila única. Detalhes:
+
+- **Logs de auditoria não são reescritos:** o formato é versionado. Os eventos existentes continuam
+  na cadeia global (formato 1), verificáveis com o hash original, e eleições antigas continuam nela.
+  Eleições novas usam a própria cadeia (formato 2), cujo hash inclui a chave da cadeia.
+- **Completude:** como cada eleição tem a própria cadeia, apagar a cadeia **inteira** de uma eleição
+  não quebraria nenhum hash. A verificação agora exige que toda eleição tenha o seu `ELECTION_CREATED`
+  (`ELECTION_WITHOUT_AUDIT`), exceto as criadas antes de a auditoria existir, marcadas uma única vez
+  pela migration. A role da aplicação não pode inserir nem alterar essa marca (testado).
+- **Âncoras** (lacre, `verify?electionId=`) passam a se referir à cadeia da eleição. A apuração
+  verifica só a cadeia da própria eleição, então fica mais rápida.
+
+**Conclusão:**
+
+1. O gargalo de projeto (a fila global) foi removido. As seções agora são **independentes**: cadeia,
+   contadores, locks e verificação são todos por eleição.
+2. O limite restante é **físico**: o disco de um único PostgreSQL (cada habilitação e cada voto
+   precisam estar gravados antes da confirmação). Desligar essa garantia (`synchronous_commit=off`)
+   aumentaria a vazão **perdendo votos confirmados numa queda de energia**: não foi testado de propósito.
+3. Como as seções são independentes, o caminho é **particionar**: várias instâncias da aplicação e
+   **vários bancos**, cada um com um conjunto de seções (por estado ou zona eleitoral). Neste
+   notebook, um banco faz ~950/s; 6 a 15 bancos (em hardware de servidor, menos) cobririam a média e
+   os picos nacionais. Nenhuma mudança de código é necessária para isso.
+4. E o mais importante: a urna brasileira real nem é online. Cada urna apura a própria seção offline,
+   e só o **boletim de urna assinado** viaja. A arquitetura deste projeto, agora com tudo por eleição,
+   é compatível com esse modelo: cada seção poderia ser uma instância isolada, e o centro só agregaria
+   boletins verificáveis (o verificador independente já existe).

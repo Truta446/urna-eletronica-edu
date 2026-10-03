@@ -199,6 +199,16 @@ controla (outro sistema, e-mail para fiscais, papel). Este projeto não automati
   (votos, sessões consumidas, habilitados, cadastrados, habilitados sem voto).
 - Nenhum CPF, HMAC de CPF, token, id de voto ou escolha. Testado varrendo a tabela inteira.
 
+### Cadeias por eleição (depois da Fase 10, por performance)
+
+Desde a migration `audit_chain_per_election`, cada eleição tem a **própria** cadeia (formato 2, cujo
+hash inclui a chave da cadeia) e o próprio lock. A cadeia global antiga (formato 1) continua intacta e
+verificável, porque logs de auditoria não se reescrevem. Duas checagens novas compensam a separação:
+uma cadeia de eleição precisa começar pelo `ELECTION_CREATED` (`CHAIN_HEAD_MISMATCH`), e toda eleição
+precisa ter o seu (`ELECTION_WITHOUT_AUDIT`), para que apagar a cadeia inteira de uma eleição não passe
+despercebido. `GET /admin/audit/verify` verifica todas as cadeias; com `?electionId=`, só a da eleição
+(onde se aplica a âncora). Motivo e números em [performance.md](performance.md).
+
 ## Logs e redaction (Fase 1 — implementado)
 
 Duas camadas, ambas cobertas por `test/unit/redaction.test.ts`:

@@ -595,5 +595,5 @@ Se quiser continuar estudando, cada item abaixo ataca um risco documentado:
 - **Hash lento (scrypt/Argon2)** no identificador do eleitor: fecha parte do 🟡 de banco + pepper vazados.
 - **KMS/HSM** para pepper, chave de assinatura e partes dos trustees.
 - **CI** (GitHub Actions) rodando lint, typecheck e testes com um PostgreSQL de serviço.
-- **Uma cadeia de auditoria por eleição** (ancorada numa global): removeria o gargalo das
-  habilitações descrito em [performance.md](performance.md).
+- **Particionar o banco por seções** (estado/zona): o projeto já tem tudo por eleição (cadeia,
+  contadores, locks); falta só infraestrutura. Ver [performance.md](performance.md).
