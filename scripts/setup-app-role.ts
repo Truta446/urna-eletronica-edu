@@ -11,7 +11,7 @@ try {
   // sem .env: só o ambiente
 }
 
-const target = process.argv[2] === 'test' ? 'TEST_' : '';
+const target = process.argv[2] === 'test' ? 'TEST_' : process.argv[2] === 'bench' ? 'BENCH_' : '';
 const appUrl = process.env[`${target}DATABASE_URL`];
 const ownerUrl = process.env[`${target}MIGRATION_DATABASE_URL`];
 if (!appUrl || !ownerUrl) {

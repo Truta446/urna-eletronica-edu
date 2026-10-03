@@ -26,7 +26,8 @@
     "signing-key:generate": "tsx scripts/signing-key.ts",
     "verify:result": "tsx scripts/verify-result.ts",
     "trustees:keygen": "tsx scripts/trustees-keygen.ts",
-    "demo": "tsx --env-file-if-exists=.env scripts/demo.ts"
+    "demo": "tsx --env-file-if-exists=.env scripts/demo.ts",
+    "bench": "tsx --env-file-if-exists=.env scripts/bench.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
