@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-label="Separação entre eleitor, autorização e voto">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="420" rx="16" fill="#f7f8fa"/>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="40" y="48" font-size="22" font-weight="700" fill="#1b2733">O que fica gravado — e o que deliberadamente NÃO fica</text>
+    <text x="40" y="74" font-size="14" fill="#5b6b7c">Cada tabela só conhece o mínimo. Não existe chave, FK ou timestamp que una “quem votou” a “em quem votou”.</text>
+
+    <!-- Voter -->
+    <g transform="translate(40 110)">
+      <rect width="300" height="220" rx="12" fill="#ffffff" stroke="#2f6fb3" stroke-width="2"/>
+      <rect width="300" height="44" rx="12" fill="#2f6fb3"/>
+      <rect y="30" width="300" height="14" fill="#2f6fb3"/>
+      <text x="18" y="29" font-size="17" font-weight="700" fill="#fff">voters</text>
+      <text x="282" y="29" font-size="12" fill="#d8e7f7" text-anchor="end">contexto: cadastro</text>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#1b2733">
+        <text x="18" y="76">id</text>
+        <text x="18" y="102">election_id</text>
+        <text x="18" y="128">identifier_hmac  <tspan fill="#5b6b7c">(pepper)</tspan></text>
+        <text x="18" y="154">has_voted        <tspan fill="#5b6b7c">(bool)</tspan></text>
+      </g>
+      <text x="18" y="196" font-size="12" fill="#5b6b7c">sem CPF/título em claro · sem horário do voto</text>
+    </g>
+
+    <!-- VotingSession -->
+    <g transform="translate(400 110)">
+      <rect width="300" height="220" rx="12" fill="#ffffff" stroke="#b7791f" stroke-width="2"/>
+      <rect width="300" height="44" rx="12" fill="#b7791f"/>
+      <rect y="30" width="300" height="14" fill="#b7791f"/>
+      <text x="18" y="29" font-size="17" font-weight="700" fill="#fff">voting_sessions</text>
+      <text x="282" y="29" font-size="12" fill="#fbebd0" text-anchor="end">credencial descartável</text>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#1b2733">
+        <text x="18" y="76">id</text>
+        <text x="18" y="102">election_id</text>
+        <text x="18" y="128">token_hash  <tspan fill="#5b6b7c">(sha256)</tspan></text>
+        <text x="18" y="154">expires_at · consumed</text>
+      </g>
+      <text x="18" y="196" font-size="12" fill="#5b6b7c">sem voter_id · token em claro nunca é salvo</text>
+    </g>
+
+    <!-- Ballot -->
+    <g transform="translate(760 110)">
+      <rect width="300" height="220" rx="12" fill="#ffffff" stroke="#2e8b57" stroke-width="2"/>
+      <rect width="300" height="44" rx="12" fill="#2e8b57"/>
+      <rect y="30" width="300" height="14" fill="#2e8b57"/>
+      <text x="18" y="29" font-size="17" font-weight="700" fill="#fff">ballots</text>
+      <text x="282" y="29" font-size="12" fill="#d6f0e1" text-anchor="end">urna (append-only)</text>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#1b2733">
+        <text x="18" y="76">id  <tspan fill="#5b6b7c">(uuid v4, aleatório)</tspan></text>
+        <text x="18" y="102">election_id</text>
+        <text x="18" y="128">choice | ciphertext</text>
+        <text x="18" y="154">nullifier · commitment</text>
+      </g>
+      <text x="18" y="196" font-size="12" fill="#5b6b7c">sem voter_id · sem session_id · sem created_at</text>
+    </g>
+
+    <!-- broken links -->
+    <g stroke="#c0392b" stroke-width="3" stroke-dasharray="7 6" fill="none">
+      <line x1="342" y1="220" x2="398" y2="220"/>
+      <line x1="702" y1="220" x2="758" y2="220"/>
+    </g>
+    <g fill="#ffffff" stroke="#c0392b" stroke-width="3">
+      <circle cx="370" cy="220" r="15"/>
+      <circle cx="730" cy="220" r="15"/>
+    </g>
+    <g stroke="#c0392b" stroke-width="3" stroke-linecap="round">
+      <line x1="363" y1="213" x2="377" y2="227"/><line x1="377" y1="213" x2="363" y2="227"/>
+      <line x1="723" y1="213" x2="737" y2="227"/><line x1="737" y1="213" x2="723" y2="227"/>
+    </g>
+
+    <!-- footer -->
+    <g transform="translate(40 362)">
+      <rect width="1020" height="40" rx="10" fill="#fff4e5" stroke="#f0c27b"/>
+      <text x="18" y="26" font-size="14" fill="#7a4b00"><tspan font-weight="700">Risco conhecido:</tspan> o servidor vê eleitor e token no momento da habilitação. Sem blind signatures, um backend malicioso ainda consegue correlacionar.</text>
+    </g>
+  </g>
+</svg>

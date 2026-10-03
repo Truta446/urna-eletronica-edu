@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-label="Urna Eletrônica Educacional">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1f3a"/>
+      <stop offset="1" stop-color="#123d2e"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f1ea"/>
+      <stop offset="1" stop-color="#d9d4c7"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d3b2a"/>
+      <stop offset="1" stop-color="#0f2419"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="380" fill="url(#bg)"/>
+  <rect width="1200" height="380" fill="url(#grid)"/>
+
+  <!-- hash chain decoration -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#7fd1a8" fill-opacity="0.35">
+    <text x="40" y="350">prev=9f2c…e1 → sha256(evt‖prev)=4a7b…0d → sha256(evt‖prev)=c03e…92 → sha256(evt‖prev)=11fa…7c → …</text>
+  </g>
+
+  <!-- title -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="64" y="118" font-size="20" font-weight="600" fill="#7fd1a8" letter-spacing="3">PROTÓTIPO EDUCACIONAL · BACKEND</text>
+    <text x="64" y="182" font-size="56" font-weight="800" fill="#ffffff">Urna Eletrônica</text>
+    <text x="64" y="240" font-size="56" font-weight="800" fill="#f2c94c">Educacional</text>
+    <text x="64" y="288" font-size="20" fill="#c9d6e3">Integridade · anonimato · auditabilidade · concorrência</text>
+    <text x="64" y="316" font-size="16" fill="#8aa0b6">TypeScript · Fastify · PostgreSQL · Prisma · Zod · Vitest</text>
+  </g>
+
+  <!-- stylized voting machine -->
+  <g transform="translate(760 54)">
+    <rect x="0" y="0" width="380" height="250" rx="22" fill="url(#body)" stroke="#a8a294" stroke-width="2"/>
+    <rect x="20" y="22" width="210" height="150" rx="10" fill="url(#screen)" stroke="#5a6b5f" stroke-width="2"/>
+    <g font-family="Segoe UI, Helvetica, Arial, sans-serif" fill="#cfe9d9">
+      <text x="34" y="48" font-size="11" letter-spacing="1">SEU VOTO PARA</text>
+      <text x="34" y="74" font-size="15" font-weight="700">CANDIDATO(A)</text>
+      <rect x="34" y="88" width="34" height="42" rx="4" fill="none" stroke="#cfe9d9" stroke-width="2"/>
+      <rect x="74" y="88" width="34" height="42" rx="4" fill="none" stroke="#cfe9d9" stroke-width="2"/>
+      <text x="43" y="119" font-size="26" font-weight="700">4</text>
+      <text x="83" y="119" font-size="26" font-weight="700">2</text>
+      <text x="34" y="158" font-size="10" fill-opacity="0.7">voto secreto · sem vínculo eleitor↔voto</text>
+    </g>
+    <!-- keypad -->
+    <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle">
+      <g fill="#2b2b2b">
+        <rect x="250" y="24" width="34" height="26" rx="5"/><rect x="290" y="24" width="34" height="26" rx="5"/><rect x="330" y="24" width="34" height="26" rx="5"/>
+        <rect x="250" y="56" width="34" height="26" rx="5"/><rect x="290" y="56" width="34" height="26" rx="5"/><rect x="330" y="56" width="34" height="26" rx="5"/>
+        <rect x="250" y="88" width="34" height="26" rx="5"/><rect x="290" y="88" width="34" height="26" rx="5"/><rect x="330" y="88" width="34" height="26" rx="5"/>
+        <rect x="290" y="120" width="34" height="26" rx="5"/>
+      </g>
+      <text x="267" y="43">1</text><text x="307" y="43">2</text><text x="347" y="43">3</text>
+      <text x="267" y="75">4</text><text x="307" y="75">5</text><text x="347" y="75">6</text>
+      <text x="267" y="107">7</text><text x="307" y="107">8</text><text x="347" y="107">9</text>
+      <text x="307" y="139">0</text>
+    </g>
+    <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">
+      <rect x="238" y="160" width="46" height="28" rx="5" fill="#ffffff" stroke="#9a9a9a"/>
+      <text x="261" y="178" fill="#333">BRANCO</text>
+      <rect x="288" y="160" width="48" height="28" rx="5" fill="#e86a2b"/>
+      <text x="312" y="177" fill="#ffffff" font-size="8">CORRIGE</text>
+      <rect x="340" y="160" width="30" height="28" rx="5" fill="#2e9e4f"/>
+      <text x="355" y="178" fill="#ffffff">OK</text>
+    </g>
+    <rect x="20" y="196" width="340" height="36" rx="8" fill="#c9c3b5"/>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#4d4a42">
+      <text x="34" y="219">ballot.commitment = sha256(…) · audit chain ✓</text>
+    </g>
+  </g>
+</svg>
