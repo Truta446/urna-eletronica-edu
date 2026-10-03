@@ -92,9 +92,11 @@ Em **uma única instrução SQL** (`WITH … UPDATE … INSERT`):
 2. `UPDATE voters SET has_voted = true WHERE … AND NOT has_voted`;
 3. só se o passo 2 afetou uma linha: grava `voting_sessions(token_hash = SHA-256(token), expires_at)`, **sem `voter_id`**;
 4. no COMMIT, a constraint trigger confere `sessões == eleitores habilitados`;
-5. registra `VOTER_AUTHORIZED` na auditoria (Fase 6).
+5. registra `VOTER_AUTHORIZED` na auditoria, com nonce aleatório assinado pelo servidor e sem dado do eleitor (Fases 6 e 10).
 
-`token = randomBytes(32)` em base64url. `expiresAt = min(agora + TTL, endsAt)`.
+`token = randomBytes(32)` em base64url. `expiresAt = min(arredondar_para_cima_ao_minuto(agora + TTL), endsAt)`. O arredondamento impede ligar a sessão ao evento de auditoria pelo horário exato (Fase 10, ataque A2).
+
+Esta rota **não gera log de acesso** (Fase 9): horários de habilitação e de voto nos logs permitiriam correlação.
 
 Respostas:
 
@@ -270,16 +272,16 @@ Só admin.
   - `{ "valid": true, "eventCount": n, "head": { "seq", "hash" } }`
   - `{ "valid": false, "eventCount": n, "failure": { "seq", "reason" } }`, com `reason` ∈ `SEQUENCE_GAP`, `BROKEN_LINK`, `HASH_MISMATCH`, `ANCHOR_MISMATCH`, `ANCHOR_NOT_FOUND`
 
-| Evento                              | Ator        | Payload                           |
-| ----------------------------------- | ----------- | --------------------------------- |
-| `ELECTION_CREATED`                  | ADMIN       | `name`, `startsAt`, `endsAt`      |
-| `CANDIDATE_CREATED`                 | ADMIN       | `candidateId`, `number`, `name`   |
-| `VOTER_REGISTERED`                  | ADMIN       | `voterId` (nunca o CPF)           |
-| `ELECTION_OPENED`                   | ADMIN       | —                                 |
-| `VOTER_AUTHORIZED`                  | POLL_WORKER | — (**sem eleitor**, de propósito) |
-| `ELECTION_CLOSED`                   | ADMIN       | —                                 |
-| `BALLOT_BOX_SEALED`                 | SYSTEM      | contagens finais                  |
-| `TALLY_STARTED` / `TALLY_COMPLETED` | —           | Fase 7                            |
+| Evento                              | Ator        | Payload                                                                                                         |
+| ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------- |
+| `ELECTION_CREATED`                  | ADMIN       | `name`, `startsAt`, `endsAt`                                                                                    |
+| `CANDIDATE_CREATED`                 | ADMIN       | `candidateId`, `number`, `name`                                                                                 |
+| `VOTER_REGISTERED`                  | ADMIN       | `voterId` (nunca o CPF)                                                                                         |
+| `ELECTION_OPENED`                   | ADMIN       | —                                                                                                               |
+| `VOTER_AUTHORIZED`                  | POLL_WORKER | `nonce`, `signature`, `keyId` (**sem eleitor**, de propósito; a assinatura detecta enchimento de urna, Fase 10) |
+| `ELECTION_CLOSED`                   | ADMIN       | —                                                                                                               |
+| `BALLOT_BOX_SEALED`                 | SYSTEM      | contagens finais                                                                                                |
+| `TALLY_STARTED` / `TALLY_COMPLETED` | —           | Fase 7                                                                                                          |
 
 Não existe `VOTE_ACCEPTED`: um evento por voto, com horário, permitiria correlacionar habilitação e voto.
 
