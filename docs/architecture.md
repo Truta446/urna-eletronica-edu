@@ -120,7 +120,7 @@ flowchart TD
     F -- sim --> G["INSERT ballots (choice, nullifier, commitment)"]
     G --> H[INSERT idempotency_records]
     H --> I[(COMMIT)]
-    I --> J[201 · accepted + receipt]
+    I --> J[201 · accepted, sem recibo]
 ```
 
 ## Sequência completa
@@ -153,7 +153,7 @@ sequenceDiagram
     BB->>DB: INSERT ballots (nullifier UNIQUE)
     BB->>DB: INSERT idempotency_records
     BB->>DB: COMMIT
-    BB-->>E: 201 { accepted, receipt }
+    BB-->>E: 201 { accepted: true }
 ```
 
 ### Por que não "uma transação que faz tudo"?
@@ -223,6 +223,10 @@ test/
 | Constraint trigger de balanço (adiada)                | Confiar no código                               | Sessão sem eleitor marcado (ou o inverso) falha no COMMIT      |
 | Relógio da aplicação passado ao SQL                   | `now()` do banco                                | Uma fonte de tempo; testes determinísticos (risco: skew)       |
 | `ADMIN` ≠ `POLL_WORKER`                               | Um papel só                                     | Separação de funções                                           |
+| Sem recibo de voto                                    | Recibo com commitment                           | Recibo + lista publicada = prova do voto (venda/coerção)       |
+| Nullifier sem chave secreta                           | HMAC com chave                                  | Token de 256 bits já impede a ligação; um segredo a menos      |
+| Idempotência com HMAC(token, …)                       | SHA-256(payload)                                | Poucos payloads possíveis: hash simples revelaria o voto       |
+| Balanço votos == sessões consumidas                   | Confiar no código                               | Voto sem token (ou token sem voto) falha no COMMIT             |
 | `close` só depois de `endsAt`                         | Admin fecha quando quiser                       | Impede encerrar a votação antes da hora                        |
 | Relógio injetado (`Clock`)                            | `new Date()` espalhado                          | Testes de tempo sem `sleep`                                    |
 | Prisma + SQL nas migrations                           | Só Prisma                                       | O Prisma não expressa CHECK, triggers nem roles                |

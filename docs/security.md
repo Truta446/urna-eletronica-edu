@@ -84,20 +84,43 @@ SQL**. A primeira versão usava dois comandos, e em `READ COMMITTED` cada um via
 diferente, o que gerava falso desbalanço sob concorrência. O teste de habilitações concorrentes
 pegou esse bug, corrigido numa migration nova (a original não foi editada).
 
-## Nullifier e commitment (Fase 5)
+## Nullifier, commitment e idempotência (Fase 5 — implementado)
 
-- `nullifier = HMAC-SHA256(k_nullifier, token)`, com `UNIQUE` em `ballots`. Garante no banco que um
-  token gera no máximo um voto, sem FK para `voting_sessions`. Não é possível ligar o `nullifier` ao
-  `token_hash` sem o token em claro.
-- `commitment = SHA-256(ballot_id ‖ election_id ‖ escolha canônica ‖ nonce)`. Entra na Merkle root.
+Todas as derivações estão em `src/security/ballot-crypto.ts` e usam separação de domínio
+(`prefixo \0 dados`), com SHA-256 e HMAC-SHA256 apenas.
 
-## Versão 1 — voto em claro (Fases 5–7)
+| Valor                 | Fórmula                                                            | Para quê                                                                       |
+| --------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `nullifier`           | `SHA-256("urna-edu/nullifier/v1" ‖ token)`                         | `UNIQUE`: um token, no máximo um voto, garantido no banco sem FK para a sessão |
+| `commitment`          | `SHA-256("urna-edu/ballot/v1" ‖ id ‖ election ‖ kind ‖ candidate)` | Folha da Merkle root (Fase 7); recalculável a partir da linha                  |
+| `scope_key`           | `HMAC(token, "…idempotency-scope/v1" ‖ Idempotency-Key)`           | Chave do retry; ninguém sem o token a recalcula                                |
+| `request_fingerprint` | `HMAC(token, "…request-fingerprint/v1" ‖ payload canônico)`        | Detecta a mesma chave com outro payload, sem revelar a escolha                 |
+
+**Por que o nullifier não tem chave secreta:** o token tem 256 bits e nunca é armazenado. Sem ele,
+`SHA-256(prefixo ‖ token)` e `SHA-256(token)` (o `token_hash` da sessão) não podem ser ligados.
+Uma chave a mais seria um segredo a mais para gerenciar, sem ganho.
+
+**Por que o fingerprint é um HMAC com o token:** só há poucos payloads possíveis (um por candidato,
+mais branco e nulo). `SHA-256(payload)` seria revertido testando todos.
+
+**Garantias no banco:** votos são append-only (trigger `UE008`), só entram com a eleição `OPEN`, a FK
+composta `(election_id, candidate_id)` impede votar em candidato de outra eleição, um CHECK amarra
+`kind` a `candidate_id`, e a constraint trigger adiada exige `votos == sessões consumidas` (`UE009`).
+Somado à Fase 4: **votos == tokens usados ≤ eleitores habilitados**.
+
+**Risco conhecido (provado em `test/adversarial/known-risks.test.ts`):** consumir o token e gravar o
+voto na mesma transação dá `voting_sessions.xmin = ballots.xmin`. Isoladamente, isso liga uma sessão
+(que não tem eleitor) a um voto. Combinado com o vínculo eleitor ↔ sessão da Fase 4, que some das
+linhas vivas depois do voto mas fica na versão antiga da linha até o `VACUUM`, um observador com
+acesso físico ao banco **durante** a eleição liga eleitor e voto.
+
+## Versão 1 — voto em claro (Fases 5–7 — implementado)
 
 A escolha fica legível no banco (`kind` + `candidate_id`), mas sem nenhum vínculo com o eleitor. Serve
 para entender o domínio e testar concorrência, idempotência e apuração.
 
-**Classificação:** sigilo contra quem lê o banco 🔴 não garantido. Anonimato (não vinculação) 🟡
-parcialmente mitigado.
+**Classificação:** sigilo contra quem lê o banco 🔴 não garantido. Anonimato (não vinculação) contra
+dump lógico 🟡 parcialmente mitigado. Contra acesso físico durante a eleição 🔴 não garantido (xmin).
 
 ## Versão 2 — voto cifrado (Fase 8, proposta)
 

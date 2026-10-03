@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-4%20%C2%B7%20autoriza%C3%A7%C3%A3o-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-5%20%C2%B7%20voto-f2c94c?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -122,7 +122,7 @@ sequenceDiagram
         B->>DB: INSERT ballots (choice, nullifier UNIQUE, commitment)
         B->>DB: INSERT idempotency_records
         B->>DB: COMMIT
-        B-->>E: 201 { accepted: true, receipt }
+        B-->>E: 201 { accepted: true }
     else 0 linhas (token usado, expirado ou inexistente)
         B->>DB: ROLLBACK
         B-->>E: 409 / 401 — ou a resposta original, se for retry idempotente
@@ -199,7 +199,7 @@ erDiagram
 | Backend malicioso correlaciona em memória      | Blind signatures (RFC 9474) — fase futura               | 🔴 não garantida                                            |
 | Vazamento do banco                             | Identificadores com HMAC + pepper fora do banco         | 🟡 parcialmente mitigada                                    |
 | Edição/remoção de eventos de auditoria         | Hash chain + `verifyAuditChain()`                       | 🟡 detecta edição no meio; truncamento exige âncora externa |
-| Coerção / venda de voto                        | Recibo não revela a escolha                             | ⚠️ risco conhecido                                          |
+| Coerção / venda de voto                        | Nenhum recibo nem id de voto na resposta                | ⚠️ risco conhecido                                          |
 
 O modelo completo, com ativo, atacante, vetor, impacto, mitigação e risco residual de cada ameaça,
 está em [`docs/threat-model.md`](docs/threat-model.md).
@@ -223,7 +223,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 2** — Eleições e candidatos
 - [x] **Fase 3** — Eleitores (HMAC + pepper, sem identificação em claro)
 - [x] **Fase 4** — Autorização de votação (token aleatório, expirável, single-use, hash no banco)
-- [ ] **Fase 5** — Voto (transações, concorrência, idempotência, anonimato)
+- [x] **Fase 5** — Voto (transações, concorrência, idempotência, anonimato)
 - [ ] **Fase 6** — Auditoria (hash chain + `verifyAuditChain()`)
 - [ ] **Fase 7** — Apuração determinística + testes de consistência
 - [ ] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
@@ -282,16 +282,17 @@ curl -s localhost:3000/admin/elections -H "Authorization: Bearer $TOKEN" \
   -d '{"name":"Grêmio","startsAt":"2030-01-01T08:00:00Z","endsAt":"2030-01-01T17:00:00Z"}'
 ```
 
-| Endpoint                                    | Acesso  | Fase |
-| ------------------------------------------- | ------- | ---- |
-| `GET /health`, `GET /health/ready`          | público | 1    |
-| `POST /admin/elections`                     | admin   | 2    |
-| `GET /elections/:id`                        | público | 2    |
-| `POST /admin/elections/:id/open` · `/close` | admin   | 2    |
-| `POST /admin/elections/:id/candidates`      | admin   | 2    |
-| `GET /elections/:id/candidates`             | público | 2    |
-| `POST /admin/elections/:id/voters`          | admin   | 3    |
-| `POST /elections/:id/voting-sessions`       | mesário | 4    |
+| Endpoint                                    | Acesso                     | Fase |
+| ------------------------------------------- | -------------------------- | ---- |
+| `GET /health`, `GET /health/ready`          | público                    | 1    |
+| `POST /admin/elections`                     | admin                      | 2    |
+| `GET /elections/:id`                        | público                    | 2    |
+| `POST /admin/elections/:id/open` · `/close` | admin                      | 2    |
+| `POST /admin/elections/:id/candidates`      | admin                      | 2    |
+| `GET /elections/:id/candidates`             | público                    | 2    |
+| `POST /admin/elections/:id/voters`          | admin                      | 3    |
+| `POST /elections/:id/voting-sessions`       | mesário                    | 4    |
+| `POST /ballots`                             | eleitor (token de votação) | 5    |
 
 Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 

@@ -125,22 +125,35 @@ Body:
 { "type": "null" }
 ```
 
-Em uma única transação:
+`Idempotency-Key`: 16 a 128 caracteres `[A-Za-z0-9_-]` (um UUID serve), obrigatória.
 
-1. procura um registro de idempotência para esta chave (ver abaixo);
-2. consome o token com `UPDATE … WHERE NOT consumed AND expires_at > now() RETURNING election_id`;
-3. confere que `electionId` do body é o mesmo do token e que a eleição está `OPEN`;
+Em uma única transação `READ COMMITTED`:
+
+1. procura um registro de idempotência para esta chave (ver abaixo); se existir, devolve a resposta guardada;
+2. consome o token com `UPDATE voting_sessions SET consumed = true WHERE token_hash = $1 AND NOT consumed AND expires_at > $agora RETURNING election_id`;
+3. confere que `electionId` do body é o mesmo do token;
 4. resolve o candidato pelo número, dentro da eleição;
-5. insere o ballot com `nullifier = HMAC(chave, token)` (`UNIQUE`) e `commitment`;
-6. grava o registro de idempotência com a resposta.
+5. insere o ballot com `nullifier` (`UNIQUE`) e `commitment`;
+6. grava o registro de idempotência com a resposta;
+7. no COMMIT, o banco confere `votos == sessões consumidas`.
 
-Respostas:
+Se os passos 3 ou 4 falharem, o ROLLBACK **devolve o token**: o eleitor pode corrigir e votar.
+Se o passo 2 não consumir nada, uma nova consulta (fora da transação) decide se é um retry
+concorrente que acabou de terminar (devolve a resposta original) ou um token inválido/usado.
 
-- `201` → `{ "accepted": true, "receipt": "…" }`
-- `200` → a mesma resposta original, quando é um retry idempotente
-- `401` token inexistente ou expirado
-- `409` token já usado (com outra `Idempotency-Key`); eleição não está aberta
+Respostas (todas com `Cache-Control: no-store`):
+
+- `201` → `{ "accepted": true }`, com `Idempotent-Replayed: false`
+- `201` → a mesma resposta, com `Idempotent-Replayed: true`, quando é um retry com a mesma chave e o mesmo payload
+- `400` body inválido; `Idempotency-Key` ausente ou malformada
+- `401` `Authorization` ausente/malformado (antes de ler o body); token inexistente ou expirado
+- `409` token já usado (com outra `Idempotency-Key`); eleição não está `OPEN`
 - `422` candidato inexistente; mesma `Idempotency-Key` com payload diferente; `electionId` diferente do token
+
+**Sem recibo e sem id do voto.** Um recibo que identifica o voto, cruzado com a lista de votos
+publicada na apuração, permitiria ao eleitor _provar_ em quem votou (venda de voto, coerção). A urna
+brasileira também não emite comprovante. O custo é que o eleitor não consegue verificar que o voto
+dele foi incluído (verificabilidade individual).
 
 O token vai no header, não na URL nem no body, para não cair em access logs nem em mensagens de
 validação.
@@ -151,9 +164,9 @@ validação.
 | --------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `scope_key`           | `HMAC(token, idempotencyKey)`   | Só quem tem o token consegue recalcular                                                                     |
 | `request_fingerprint` | `HMAC(token, payload canônico)` | **Não** pode ser `SHA-256(payload)`: com poucos candidatos, o hash do payload revela o voto por força bruta |
-| `response`            | status + body                   | Para devolver a mesma resposta no retry                                                                     |
+| `response`            | status + body                   | Para devolver a mesma resposta no retry. Contém só `{ "accepted": true }`                                   |
 
-Os registros são apagados no fechamento da eleição.
+Os registros são apagados no fechamento da eleição, na mesma transação do `OPEN → CLOSED`.
 
 ## 5. Fechamento
 
