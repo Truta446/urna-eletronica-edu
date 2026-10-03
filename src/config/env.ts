@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { adminCredentialsSchema } from '../security/admin-credentials.js';
+import { pepperSchema } from '../security/voter-identifier.js';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -8,6 +9,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   ADMIN_CREDENTIALS: adminCredentialsSchema,
+  VOTER_ID_PEPPER: pepperSchema,
 });
 
 export type Env = z.infer<typeof envSchema>;

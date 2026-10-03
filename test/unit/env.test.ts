@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { InvalidEnvironmentError, loadEnv } from '../../src/config/env.js';
 
 const HASH = 'a'.repeat(64);
+const PEPPER = Buffer.alloc(32, 7);
 const validEnv = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
   ADMIN_CREDENTIALS: `alice:${HASH}`,
+  VOTER_ID_PEPPER: PEPPER.toString('base64url'),
 };
 
 describe('loadEnv', () => {
@@ -16,6 +18,7 @@ describe('loadEnv', () => {
       LOG_LEVEL: 'info',
       DATABASE_URL: validEnv.DATABASE_URL,
       ADMIN_CREDENTIALS: [{ label: 'alice', tokenHash: Buffer.from(HASH, 'hex') }],
+      VOTER_ID_PEPPER: PEPPER,
     });
   });
 
@@ -24,6 +27,17 @@ describe('loadEnv', () => {
   });
 
   it.each([
+    ['missing VOTER_ID_PEPPER', { ...validEnv, VOTER_ID_PEPPER: undefined }, 'VOTER_ID_PEPPER'],
+    [
+      'short VOTER_ID_PEPPER',
+      { ...validEnv, VOTER_ID_PEPPER: Buffer.alloc(31).toString('base64url') },
+      'VOTER_ID_PEPPER',
+    ],
+    [
+      'non-base64url VOTER_ID_PEPPER',
+      { ...validEnv, VOTER_ID_PEPPER: `${'a'.repeat(43)}+/=` },
+      'VOTER_ID_PEPPER',
+    ],
     ['missing DATABASE_URL', { ...validEnv, DATABASE_URL: undefined }, 'DATABASE_URL'],
     [
       'non-postgres DATABASE_URL',
