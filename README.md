@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-2%20%C2%B7%20elei%C3%A7%C3%B5es-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-3%20%C2%B7%20eleitores-f2c94c?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -221,7 +221,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 0** — Análise: arquitetura, threat model, modelo de dados, fluxo
 - [x] **Fase 1** — Bootstrap: TypeScript, Fastify, healthcheck, Docker Compose, Prisma, Vitest, lint
 - [x] **Fase 2** — Eleições e candidatos
-- [ ] **Fase 3** — Eleitores (HMAC + pepper, sem identificação em claro)
+- [x] **Fase 3** — Eleitores (HMAC + pepper, sem identificação em claro)
 - [ ] **Fase 4** — Autorização de votação (token aleatório, expirável, single-use, hash no banco)
 - [ ] **Fase 5** — Voto (transações, concorrência, idempotência, anonimato)
 - [ ] **Fase 6** — Auditoria (hash chain + `verifyAuditChain()`)
@@ -267,6 +267,7 @@ curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 | `npm run build` / `npm start`    | Compila para `dist/` e executa                                                                |
 | `npm run db:migrate:dev`         | Cria uma nova migration a partir do `schema.prisma`                                           |
 | `npm run admin:token -- <label>` | Gera um token de admin e a linha para `ADMIN_CREDENTIALS`                                     |
+| `npm run secret:generate`        | Gera 32 bytes aleatórios em base64url (ex.: `VOTER_ID_PEPPER`)                                |
 
 ### Experimentando a API
 
@@ -288,6 +289,7 @@ curl -s localhost:3000/admin/elections -H "Authorization: Bearer $TOKEN" \
 | `POST /admin/elections/:id/open` · `/close` | admin   | 2    |
 | `POST /admin/elections/:id/candidates`      | admin   | 2    |
 | `GET /elections/:id/candidates`             | público | 2    |
+| `POST /admin/elections/:id/voters`          | admin   | 3    |
 
 Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 

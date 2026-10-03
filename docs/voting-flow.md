@@ -52,9 +52,12 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 ```
 
 - `201` → `{ "id", "electionId" }`. **A resposta não ecoa o identificador.**
-- O identificador é normalizado e guardado como `HMAC-SHA256(pepper, identificador)`.
-- `409` se já cadastrado
-- Auditoria: `VOTER_REGISTERED` (sem o identificador)
+- Aceita `###.###.###-##` ou 11 dígitos; dígitos verificadores são validados.
+- O identificador é normalizado e guardado como `HMAC-SHA256(chave da eleição, cpf)` (ver [security.md](security.md)).
+- `400` CPF inválido (a mensagem não repete o valor); campo extra como `hasVoted`
+- `404` eleição inexistente
+- `409` já cadastrado (com ou sem formatação); eleição fora de `DRAFT` (também garantido por trigger)
+- Auditoria: `VOTER_REGISTERED` (Fase 6, sem o identificador)
 
 ### Consultas públicas
 
@@ -66,7 +69,7 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 ### `POST /admin/elections/:id/open`
 
 - `DRAFT → OPEN`. Congela nome, janela de votação, candidatos e eleitores.
-- `409` se não está em `DRAFT`; `422` sem candidatos ou com a janela já encerrada
+- `409` se não está em `DRAFT`; `422` sem candidatos, sem eleitores ou com a janela já encerrada
 - Feito com um único `UPDATE … WHERE status = 'DRAFT'`: chamadas concorrentes resultam em exatamente um sucesso.
 - Auditoria: `ELECTION_OPENED` (Fase 6)
 

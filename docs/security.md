@@ -13,20 +13,51 @@ Decisões de criptografia, segredos, logs e configuração. Para ameaças e clas
 3. **Segredos nunca no banco** que eles protegem.
 4. **Entrada externa é hostil.** Body, params, headers e variáveis de ambiente passam por Zod.
 
-## Identificador do eleitor (Fase 3)
+## Identificador do eleitor (Fase 3 — implementado)
 
-| Opção                                     | Problema                                                                                            |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Guardar em claro                          | Vazamento do banco expõe a lista de eleitores                                                       |
-| `SHA-256(cpf)`                            | ~10⁹ CPFs possíveis: força bruta em segundos                                                        |
-| `SHA-256(salt_por_linha ‖ cpf)`           | Impossível buscar o eleitor sem testar linha a linha                                                |
-| Argon2 com salt por linha                 | Mesmo problema de busca, e caro                                                                     |
-| **`HMAC-SHA256(pepper, normalize(cpf))`** | ✅ Determinístico (permite índice `UNIQUE` e busca); sem o pepper, o dump é inútil para força bruta |
+O CPF tem cerca de 10⁹ valores possíveis. Qualquer hash **sem segredo** é revertido por força bruta
+em segundos. As opções:
 
-- **Pepper**: 32 bytes aleatórios em variável de ambiente (validada por Zod). Em produção, viria de um KMS/HSM.
-- **Normalização** antes do HMAC (só dígitos), para `123.456.789-09` e `12345678909` darem o mesmo valor.
-- **Rotação do pepper** exige recalcular todos os HMACs a partir dos identificadores originais, que não
-  estão no banco. Na prática, um pepper por eleição.
+| Opção                                         | Busca o eleitor?                   | Só o banco vaza            | Banco **e** pepper vazam    |
+| --------------------------------------------- | ---------------------------------- | -------------------------- | --------------------------- |
+| Guardar em claro                              | sim                                | ❌ lista exposta           | ❌                          |
+| `SHA-256(cpf)`                                | sim                                | ❌ força bruta em segundos | ❌                          |
+| `SHA-256(salt_por_linha ‖ cpf)`               | ❌ precisaria testar linha a linha | ok                         | ❌                          |
+| Argon2/scrypt com salt por linha              | ❌ mesmo problema, e caro          | ok                         | 🟡                          |
+| **`HMAC(chave_da_eleição, cpf)`** ← escolhido | ✅ índice `UNIQUE`                 | ✅ inútil sem o pepper     | ❌ segundos                 |
+| scrypt/Argon2 com pepper e salt fixo          | ✅                                 | ✅                         | 🟡 ~1 CPU-ano para 10⁹ CPFs |
+
+**Salt × pepper:**
+
+- **Salt** é público e diferente por registro; serve para impedir tabelas pré-computadas. Aqui ele não
+  funciona: precisamos _encontrar_ o eleitor a partir do CPF, então o valor guardado tem que ser
+  determinístico.
+- **Pepper** é secreto e fica **fora** do banco. É ele que torna o dump inútil.
+
+**Implementação** (`src/security/voter-identifier.ts`):
+
+```text
+chave_eleição = HKDF-SHA256(ikm = pepper, salt = electionId, info = "urna-edu/voter-identifier/v1")
+identifier_hmac = HMAC-SHA256(chave_eleição, cpf_normalizado)
+```
+
+- **Chave por eleição (HKDF):** o mesmo CPF gera valores diferentes em eleições diferentes. Um dump
+  não permite saber que a mesma pessoa participou de duas eleições.
+- **Normalização:** só dígitos, com dígitos verificadores validados. `529.982.247-25` e `52998224725`
+  são o mesmo eleitor; `111.111.111-11` é rejeitado. A versão do `info` permite trocar o esquema no futuro.
+- **Pepper:** `VOTER_ID_PEPPER`, base64url, pelo menos 32 bytes, validado por Zod na inicialização.
+  Gerar com `npm run secret:generate`. Em produção ficaria num KMS/HSM, nunca no mesmo backup que o banco.
+- **No banco:** `CHECK (octet_length(identifier_hmac) = 32)` impede gravar um CPF em claro por engano.
+- **O CPF nunca** é armazenado, devolvido em resposta, incluído em mensagem de erro ou logado. Há
+  testes para cada um desses casos.
+
+**Rotação:** como o CPF original não está no banco, trocar o pepper exige recadastrar todos os
+eleitores. Por isso a rotação natural é **entre eleições**: cada eleição já usa uma chave derivada
+própria, e um pepper novo vale para eleições criadas depois da troca.
+
+**Risco conhecido:** se o pepper vazar **junto** com o banco, o HMAC cai em segundos (espaço de 10⁹).
+Um hash lento (scrypt/Argon2, ~50 ms) elevaria isso para cerca de 1 CPU-ano, ao custo de ~50 ms por
+habilitação e minutos num cadastro em massa. Fica como endurecimento opcional.
 
 ## Tokens de votação (Fase 4)
 
