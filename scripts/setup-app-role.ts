@@ -15,7 +15,9 @@ const target = process.argv[2] === 'test' ? 'TEST_' : '';
 const appUrl = process.env[`${target}DATABASE_URL`];
 const ownerUrl = process.env[`${target}MIGRATION_DATABASE_URL`];
 if (!appUrl || !ownerUrl) {
-  process.stderr.write(`${target}DATABASE_URL e ${target}MIGRATION_DATABASE_URL são obrigatórias\n`);
+  process.stderr.write(
+    `${target}DATABASE_URL e ${target}MIGRATION_DATABASE_URL são obrigatórias\n`,
+  );
   process.exit(1);
 }
 
