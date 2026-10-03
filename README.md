@@ -37,6 +37,11 @@ integridade, voto secreto, auditabilidade, criptografia e concorrência.
 > hardware dedicado, cadeia de custódia, código auditado publicamente, procedimentos físicos, legislação
 > e muito mais do que um backend HTTP pode oferecer.
 
+> [!TIP]
+> **Comece pelo [guia completo](docs/guia-completo.md)**: ele explica o projeto inteiro, fase a fase,
+> com os conceitos, as decisões, os erros encontrados no caminho e o que o sistema não garante.
+> Para ver tudo funcionando em segundos: `npm run demo`.
+
 ## 🗳️ Por que este projeto
 
 Votar parece simples: _uma pessoa, um voto, contar no final._ Mas basta tentar implementar para que as
@@ -250,7 +255,8 @@ INV-7  N requisições concorrentes com o mesmo token produzem exatamente 1 voto
 cp .env.example .env      # valores de desenvolvimento
 docker compose up -d      # PostgreSQL 18 em 127.0.0.1:5440 (+ banco urna_test)
 npm install               # também gera o Prisma Client
-npm run db:migrate
+npm run db:migrate        # migrations + role de menor privilégio urna_app
+npm run demo              # eleição cifrada completa, passo a passo
 npm run dev               # http://127.0.0.1:3000
 ```
 
@@ -310,6 +316,7 @@ Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 
 | Documento                                              | Conteúdo                                                              |
 | ------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`docs/guia-completo.md`](docs/guia-completo.md)       | **Comece aqui:** o projeto inteiro explicado, fase a fase             |
 | [`docs/architecture.md`](docs/architecture.md)         | Componentes, fluxos e diagramas Mermaid                               |
 | [`docs/threat-model.md`](docs/threat-model.md)         | Ameaças, atacantes, mitigações e riscos residuais                     |
 | [`docs/voting-flow.md`](docs/voting-flow.md)           | Passo a passo do voto, da habilitação à apuração                      |
