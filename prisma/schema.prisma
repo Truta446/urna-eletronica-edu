@@ -29,6 +29,7 @@ model Election {
   endsAt     DateTime       @map("ends_at") @db.Timestamptz(3)
   createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   candidates Candidate[]
+  voters     Voter[]
 
   @@map("elections")
 }
@@ -45,4 +46,18 @@ model Candidate {
   /// Alvo da FK composta de ballots: garante que o candidato votado pertence à mesma eleição.
   @@unique([electionId, id])
   @@map("candidates")
+}
+
+/// Cadastro de eleitores. A identificação original NÃO é armazenada: só o HMAC com pepper.
+/// Deliberadamente sem timestamp de habilitação/voto (ver docs/threat-model.md, T07/T16).
+model Voter {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  electionId     String   @map("election_id") @db.Uuid
+  identifierHmac Bytes    @map("identifier_hmac")
+  hasVoted       Boolean  @default(false) @map("has_voted")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  election       Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([electionId, identifierHmac])
+  @@map("voters")
 }
