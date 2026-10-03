@@ -24,14 +24,18 @@
     "secret:generate": "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url') + '\\n')\"",
     "operator:token": "tsx scripts/operator-token.ts",
     "signing-key:generate": "tsx scripts/signing-key.ts",
-    "verify:result": "tsx scripts/verify-result.ts"
+    "verify:result": "tsx scripts/verify-result.ts",
+    "trustees:keygen": "tsx scripts/trustees-keygen.ts"
   },
   "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "@hpke/dhkem-x25519": "^1.8.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "canonicalize": "^5.1.0",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",
+    "shamir-secret-sharing": "^0.0.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {

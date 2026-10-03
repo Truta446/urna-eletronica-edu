@@ -53,3 +53,22 @@ export function ballotCommitment(input: CommitmentInput): Buffer<ArrayBuffer> {
     input.candidateId ?? '',
   );
 }
+
+/**
+ * Commitment de voto cifrado (v2): sobre o TEXTO CIFRADO, não sobre a escolha. Recalculável e
+ * verificável (Merkle root) por qualquer um, sem a chave de decifragem.
+ */
+export function encryptedBallotCommitment(input: {
+  ballotId: string;
+  electionId: string;
+  encapsulatedKey: Uint8Array;
+  ciphertext: Uint8Array;
+}): Buffer<ArrayBuffer> {
+  return sha256(
+    'urna-edu/ballot/v2',
+    input.ballotId,
+    input.electionId,
+    Buffer.from(input.encapsulatedKey).toString('hex'),
+    Buffer.from(input.ciphertext).toString('hex'),
+  );
+}
