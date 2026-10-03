@@ -1,16 +1,20 @@
+import { randomBytes } from 'node:crypto';
 import type { PrismaClient } from '../../../database/client.js';
+import type { Signer } from '../../../security/signing.js';
 import { generateToken, hashToken } from '../../../security/tokens.js';
 import type { VoterIdentifierHasher } from '../../../security/voter-identifier.js';
 import type { Clock } from '../../../shared/clock.js';
 import { ConflictError, NotFoundError } from '../../../shared/errors/app-error.js';
 import { appendAuditEvent } from '../../audit/application/audit-log.js';
 import type { AuditActor } from '../../audit/domain/audit-chain.js';
+import { authorizationStatement } from '../../tally/domain/statements.js';
 
 export interface AuthorizationServiceDeps {
   prisma: PrismaClient;
   clock: Clock;
   hashVoterIdentifier: VoterIdentifierHasher;
   sessionTtlSeconds: number;
+  signer: Signer;
 }
 
 export interface IssuedVotingToken {
@@ -19,8 +23,14 @@ export interface IssuedVotingToken {
   expiresAt: Date;
 }
 
+const MINUTE_MS = 60_000;
+
+function ceilToMinute(date: Date): Date {
+  return new Date(Math.ceil(date.getTime() / MINUTE_MS) * MINUTE_MS);
+}
+
 export function createAuthorizationService(deps: AuthorizationServiceDeps) {
-  const { prisma, clock, hashVoterIdentifier, sessionTtlSeconds } = deps;
+  const { prisma, clock, hashVoterIdentifier, sessionTtlSeconds, signer } = deps;
 
   /**
    * Habilita o eleitor numa ÚNICA instrução SQL:
@@ -39,7 +49,9 @@ export function createAuthorizationService(deps: AuthorizationServiceDeps) {
     const token = generateToken();
     const tokenHash = hashToken(token);
     const identifierHmac = hashVoterIdentifier(electionId, normalizedIdentifier);
-    const requestedExpiry = new Date(now.getTime() + sessionTtlSeconds * 1000);
+    // Arredondado PARA CIMA até o minuto cheio (Fase 10, ataque A2): com o instante exato,
+    // expires_at - TTL == horário do evento VOTER_AUTHORIZED, e um JOIN exato ligava os dois.
+    const requestedExpiry = ceilToMinute(new Date(now.getTime() + sessionTtlSeconds * 1000));
 
     const issued = await prisma.$transaction(async (tx) => {
       const [row] = await tx.$queryRaw<{ expires_at: Date }[]>`
@@ -65,7 +77,18 @@ export function createAuthorizationService(deps: AuthorizationServiceDeps) {
 
       // SEM voterId de propósito: o horário deste evento é o mesmo instante usado em
       // expires_at da sessão. Com o eleitor aqui, um dump lógico ligaria eleitor e sessão.
-      await appendAuditEvent(tx, { eventType: 'VOTER_AUTHORIZED', actor, electionId }, now);
+      const nonce = randomBytes(16).toString('hex');
+      const statement = authorizationStatement({ electionId, nonce, issuedAt: now.toISOString() });
+      await appendAuditEvent(
+        tx,
+        {
+          eventType: 'VOTER_AUTHORIZED',
+          actor,
+          electionId,
+          payload: { nonce, signature: signer.sign(statement), keyId: signer.keyId },
+        },
+        now,
+      );
       return row;
     });
 

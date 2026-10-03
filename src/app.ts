@@ -104,6 +104,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
       clock,
       hashVoterIdentifier,
       sessionTtlSeconds: deps.env.VOTING_SESSION_TTL_SECONDS,
+      signer,
     }),
     requirePollWorker: pollWorkerOnly,
   });

@@ -123,7 +123,14 @@ describe('audit events', () => {
     const { election, cpfs } = await createVotingElection(t, clock);
     await authorizeVoter(t, election.id, cpfs[0] ?? '');
     const authorized = (await listEvents()).find((e) => e.eventType === 'VOTER_AUTHORIZED');
-    expect(authorized?.payload).toEqual({});
+    // Só nonce aleatório + assinatura do servidor (Fase 10, ataque A1). Nada do eleitor/sessão.
+    expect(Object.keys(authorized?.payload ?? {}).sort()).toEqual(['keyId', 'nonce', 'signature']);
+    const voter = await t.prisma.voter.findFirstOrThrow({ where: { hasVoted: true } });
+    const session = await t.prisma.votingSession.findFirstOrThrow();
+    const payload = JSON.stringify(authorized?.payload);
+    expect(payload).not.toContain(voter.id);
+    expect(payload).not.toContain(session.id);
+    expect(payload).not.toContain(Buffer.from(session.tokenHash).toString('hex'));
   });
 
   it('never contains CPFs, voter identifier hashes, tokens or choices', async () => {

@@ -39,6 +39,19 @@ export function resultStatement(data: ResultData): string {
   return canonical({ type: 'urna-edu/result/v1', ...data });
 }
 
+/**
+ * Cada habilitação gera um evento assinado com um nonce aleatório (Fase 10, ataque A1).
+ * Sem referência ao eleitor nem à sessão: só prova que o SERVIDOR (dono da chave) habilitou
+ * alguém nesta eleição. Na apuração, nº de assinaturas válidas e únicas == nº de habilitados.
+ */
+export function authorizationStatement(data: {
+  electionId: string;
+  nonce: string;
+  issuedAt: string;
+}): string {
+  return canonical({ type: 'urna-edu/authorization/v1', ...data });
+}
+
 export function resultHash(statement: string): Buffer<ArrayBuffer> {
   return createHash('sha256').update(statement, 'utf8').digest();
 }
