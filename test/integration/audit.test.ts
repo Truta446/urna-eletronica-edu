@@ -102,7 +102,7 @@ describe('audit events', () => {
     });
 
     const sealed = (await listEvents()).find((e) => e.eventType === 'BALLOT_BOX_SEALED');
-    expect(sealed?.payload).toEqual({
+    expect(sealed?.payload).toMatchObject({
       ballots: 2,
       consumedSessions: 2,
       authorizedVoters: 3,

@@ -5,13 +5,16 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../../shared/errors/app-error.js';
+import type { Signer } from '../../../security/signing.js';
 import { appendAuditEvent } from '../../audit/application/audit-log.js';
+import { sealBallotBox } from '../../tally/application/seal.js';
 import { SYSTEM_ACTOR, type AuditActor } from '../../audit/domain/audit-chain.js';
 import { validateNewSchedule, type Election, type ElectionStatus } from '../domain/election.js';
 
 export interface ElectionServiceDeps {
   prisma: PrismaClient;
   clock: Clock;
+  signer: Signer;
 }
 
 export interface CreateElectionInput {
@@ -29,7 +32,7 @@ const electionSelect = {
   createdAt: true,
 } as const;
 
-export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
+export function createElectionService({ prisma, clock, signer }: ElectionServiceDeps) {
   async function get(id: string): Promise<Election> {
     const election = await prisma.election.findUnique({ where: { id }, select: electionSelect });
     if (!election) throw new NotFoundError('Election');
@@ -101,7 +104,7 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
    *  - lacra a urna: BALLOT_BOX_SEALED registra as contagens finais. O UPDATE da eleição espera
    *    as transações de voto em andamento (elas seguram FOR SHARE na linha da eleição), e
    *    depois dele nenhum voto entra. As contagens são, portanto, definitivas.
-   *    (A Merkle root dos votos entra neste evento na Fase 7.)
+   *    O lacre inclui a Merkle root dos votos e o checkpoint da auditoria, assinados (Ed25519).
    */
   async function close(id: string, actor: AuditActor): Promise<Election> {
     const now = clock.now();
@@ -121,7 +124,12 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
         tx.voter.count({ where: { electionId: id } }),
       ]);
 
-      await appendAuditEvent(tx, { eventType: 'ELECTION_CLOSED', actor, electionId: id }, now);
+      const auditHead = await appendAuditEvent(
+        tx,
+        { eventType: 'ELECTION_CLOSED', actor, electionId: id },
+        now,
+      );
+      const seal = await sealBallotBox(tx, { electionId: id, signer, now, auditHead });
       await appendAuditEvent(
         tx,
         {
@@ -135,6 +143,12 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
             registeredVoters,
             authorizedWithoutBallot: authorizedVoters - ballots,
             idempotencyRecordsPurged: purged.count,
+            merkleRoot: seal.merkleRoot,
+            auditHeadSeq: seal.auditHeadSeq,
+            auditHeadHash: seal.auditHeadHash,
+            sealedAt: seal.sealedAt,
+            signature: seal.signature,
+            keyId: seal.keyId,
           },
         },
         now,

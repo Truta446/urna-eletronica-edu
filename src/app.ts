@@ -15,7 +15,10 @@ import { registerElectionRoutes } from './modules/election/http/election.routes.
 import { registerHealthRoutes } from './modules/health/health.routes.js';
 import { createVoterService } from './modules/voter/application/voter.service.js';
 import { registerVoterRoutes } from './modules/voter/http/voter.routes.js';
+import { createSigner } from './security/signing.js';
 import { createVoterIdentifierHasher } from './security/voter-identifier.js';
+import { createTallyService } from './modules/tally/application/tally.service.js';
+import { registerTallyRoutes } from './modules/tally/http/tally.routes.js';
 import { systemClock, type Clock } from './shared/clock.js';
 import { registerErrorHandling } from './shared/errors/error-handler.js';
 import { requireOperator } from './shared/http/operator-auth.js';
@@ -30,6 +33,7 @@ export interface AppDependencies {
     | 'POLL_WORKER_CREDENTIALS'
     | 'VOTER_ID_PEPPER'
     | 'VOTING_SESSION_TTL_SECONDS'
+    | 'SIGNING_PRIVATE_KEY'
   >;
   prisma: PrismaClient;
   /** Injetável para que testes controlem o tempo (abrir/fechar eleições). */
@@ -60,13 +64,14 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const adminOnly = requireOperator('ADMIN', deps.env.ADMIN_CREDENTIALS);
   const pollWorkerOnly = requireOperator('POLL_WORKER', deps.env.POLL_WORKER_CREDENTIALS);
   const hashVoterIdentifier = createVoterIdentifierHasher(deps.env.VOTER_ID_PEPPER);
+  const signer = createSigner(deps.env.SIGNING_PRIVATE_KEY);
 
   // A API só fala JSON: qualquer outro content-type com body vira 415.
   app.removeContentTypeParser('text/plain');
   registerErrorHandling(app);
   registerHealthRoutes(app, prisma);
   registerElectionRoutes(app, {
-    elections: createElectionService({ prisma, clock }),
+    elections: createElectionService({ prisma, clock, signer }),
     requireAdmin: adminOnly,
   });
   registerCandidateRoutes(app, {
@@ -88,6 +93,10 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   registerBallotRoutes(app, { ballots: createBallotService({ prisma, clock }) });
   registerAuditRoutes(app, { audit: createAuditReader({ prisma }), requireAdmin: adminOnly });
+  registerTallyRoutes(app, {
+    tally: createTallyService({ prisma, clock, signer }),
+    requireAdmin: adminOnly,
+  });
 
   return app;
 }

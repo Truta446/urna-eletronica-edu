@@ -34,7 +34,11 @@ export interface AuditEntry {
  * Regra para evitar deadlock: este deve ser SEMPRE o último lock que a transação adquire
  * (chame no fim da operação, depois de tocar nas outras tabelas).
  */
-export async function appendAuditEvent(tx: Tx, entry: AuditEntry, now: Date): Promise<void> {
+export async function appendAuditEvent(
+  tx: Tx,
+  entry: AuditEntry,
+  now: Date,
+): Promise<{ seq: number; hash: string }> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK}::bigint)`;
 
   const last = await tx.auditEvent.findFirst({
@@ -52,9 +56,9 @@ export async function appendAuditEvent(tx: Tx, entry: AuditEntry, now: Date): Pr
     createdAt: now,
   };
 
-  await tx.auditEvent.create({
-    data: { ...data, previousHash, eventHash: computeEventHash(data, previousHash) },
-  });
+  const eventHash = computeEventHash(data, previousHash);
+  await tx.auditEvent.create({ data: { ...data, previousHash, eventHash } });
+  return { seq: data.seq, hash: eventHash.toString('hex') };
 }
 
 /** O CHECK do banco garante objeto; o Zod garante o tipo sem `as`. */

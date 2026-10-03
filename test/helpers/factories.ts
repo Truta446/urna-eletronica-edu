@@ -139,6 +139,24 @@ export async function createElectionWithTokens(
   return { election, tokens };
 }
 
+export async function closeElection({ app }: TestApp, clock: FakeClock, election: ElectionBody) {
+  clock.set(new Date(election.endsAt));
+  const response = await app.inject({
+    method: 'POST',
+    url: `/admin/elections/${election.id}/close`,
+    headers: adminHeaders,
+  });
+  expect(response.statusCode).toBe(200);
+}
+
+export async function tallyElection({ app }: TestApp, electionId: string) {
+  return app.inject({
+    method: 'POST',
+    url: `/admin/elections/${electionId}/tally`,
+    headers: adminHeaders,
+  });
+}
+
 export async function openElection({ app }: TestApp, electionId: string) {
   return app.inject({
     method: 'POST',

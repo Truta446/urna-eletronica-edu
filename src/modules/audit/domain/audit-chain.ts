@@ -10,7 +10,8 @@ export type AuditEventType =
   | 'ELECTION_CLOSED'
   | 'BALLOT_BOX_SEALED'
   | 'TALLY_STARTED'
-  | 'TALLY_COMPLETED';
+  | 'TALLY_COMPLETED'
+  | 'TALLY_FAILED';
 
 export type AuditActorType = 'ADMIN' | 'POLL_WORKER' | 'SYSTEM';
 

@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'BUSINESS_RULE_VIOLATION'
+  | 'INTEGRITY_FAILURE'
   | 'INTERNAL_ERROR';
 
 /**
@@ -51,5 +52,12 @@ export class ForbiddenError extends AppError {
 export class BusinessRuleError extends AppError {
   constructor(message: string) {
     super('BUSINESS_RULE_VIOLATION', 422, message);
+  }
+}
+
+/** Os dados guardados não batem com o lacre/assinaturas: a apuração se recusa a continuar. */
+export class IntegrityError extends AppError {
+  constructor(readonly reason: string) {
+    super('INTEGRITY_FAILURE', 409, `Integrity check failed: ${reason}`);
   }
 }
