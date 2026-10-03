@@ -9,6 +9,8 @@ export interface Election {
   startsAt: Date;
   endsAt: Date;
   createdAt: Date;
+  /** v2: chave pública X25519 (HPKE). null = votos em claro (v1). */
+  encryptionPublicKey: Uint8Array | null;
 }
 
 export interface Schedule {

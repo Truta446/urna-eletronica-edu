@@ -616,3 +616,99 @@ describe('audit_events table', () => {
     expect(state).toBe(SqlState.CHECK_VIOLATION);
   });
 });
+
+describe('encrypted ballots (v2) constraints', () => {
+  it('freezes the encryption key after DRAFT', async () => {
+    const election = await insertElection('OPEN');
+    const state = await sqlStateOf(
+      t.prisma.election.update({
+        where: { id: election.id },
+        data: { encryptionPublicKey: randomBytes(32) },
+      }),
+    );
+    expect(state).toBe(SqlState.ELECTION_FROZEN);
+  });
+
+  it('CHECK rejects an encryption key that is not 32 bytes', async () => {
+    const state = await sqlStateOf(
+      t.prisma.election.create({
+        data: {
+          name: 'E',
+          startsAt: future(1),
+          endsAt: future(2),
+          encryptionPublicKey: randomBytes(16),
+        },
+      }),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+
+  it('rejects a plaintext ballot in an encrypted election (UE013)', async () => {
+    const election = await t.prisma.election.create({
+      data: {
+        name: 'E',
+        startsAt: future(1),
+        endsAt: future(2),
+        encryptionPublicKey: randomBytes(32),
+      },
+    });
+    await t.prisma.voter.create({
+      data: { electionId: election.id, identifierHmac: randomBytes(32) },
+    });
+    await t.prisma.candidate.create({ data: { electionId: election.id, number: 1, name: 'C' } });
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'OPEN' } });
+    const voter = await t.prisma.voter.findFirstOrThrow({ where: { electionId: election.id } });
+    const session = await t.prisma.$transaction(async (tx) => {
+      await tx.voter.update({ where: { id: voter.id }, data: { hasVoted: true } });
+      return tx.votingSession.create({
+        data: { electionId: election.id, tokenHash: randomBytes(32), expiresAt: future(1) },
+      });
+    });
+    const state = await sqlStateOf(
+      t.prisma.$transaction([
+        t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: true } }),
+        t.prisma.ballot.create({
+          data: {
+            id: randomUUID(),
+            electionId: election.id,
+            kind: 'BLANK',
+            nullifier: randomBytes(32),
+            commitment: randomBytes(32),
+          },
+        }),
+      ]),
+    );
+    expect(state).toBe(SqlState.BALLOT_FORMAT_MISMATCH);
+  });
+
+  it.each([
+    [
+      'both kind and ciphertext',
+      { kind: 'BLANK' as const, encapsulatedKey: randomBytes(32), ciphertext: randomBytes(33) },
+    ],
+    ['ciphertext without encapsulated key', { ciphertext: randomBytes(33) }],
+    [
+      'ciphertext of the wrong size',
+      { encapsulatedKey: randomBytes(32), ciphertext: randomBytes(40) },
+    ],
+  ])('CHECK rejects %s', async (_label, data) => {
+    const election = await insertElection('DRAFT');
+    // Triggers desligados SÓ neste INSERT: o CHECK precisa ser a única barreira testada.
+    const state = await sqlStateOf(
+      t.prisma.$transaction([
+        t.prisma.$executeRawUnsafe('ALTER TABLE ballots DISABLE TRIGGER ALL'),
+        t.prisma.ballot.create({
+          data: {
+            id: randomUUID(),
+            electionId: election.id,
+            nullifier: randomBytes(32),
+            commitment: randomBytes(32),
+            ...data,
+          },
+        }),
+        t.prisma.$executeRawUnsafe('ALTER TABLE ballots ENABLE TRIGGER ALL'),
+      ]),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+});

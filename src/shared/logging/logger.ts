@@ -29,6 +29,10 @@ export const redactPaths = [
   '*.privateKey',
   'password',
   '*.password',
+  'trusteeShares',
+  '*.trusteeShares',
+  'decryptionKey',
+  '*.decryptionKey',
 ];
 
 /**

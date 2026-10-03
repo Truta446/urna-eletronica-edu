@@ -5,6 +5,7 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../../shared/errors/app-error.js';
+import { isValidPublicKey } from '../../../security/ballot-encryption.js';
 import type { Signer } from '../../../security/signing.js';
 import { appendAuditEvent } from '../../audit/application/audit-log.js';
 import { sealBallotBox } from '../../tally/application/seal.js';
@@ -21,6 +22,8 @@ export interface CreateElectionInput {
   name: string;
   startsAt: Date;
   endsAt: Date;
+  /** v2: se presente, todos os votos desta eleição serão cifrados para esta chave. */
+  encryptionPublicKey?: Buffer<ArrayBuffer>;
 }
 
 const electionSelect = {
@@ -30,6 +33,7 @@ const electionSelect = {
   startsAt: true,
   endsAt: true,
   createdAt: true,
+  encryptionPublicKey: true,
 } as const;
 
 export function createElectionService({ prisma, clock, signer }: ElectionServiceDeps) {
@@ -46,6 +50,9 @@ export function createElectionService({ prisma, clock, signer }: ElectionService
   async function create(input: CreateElectionInput, actor: AuditActor): Promise<Election> {
     const now = clock.now();
     validateNewSchedule(input, now);
+    if (input.encryptionPublicKey && !(await isValidPublicKey(input.encryptionPublicKey))) {
+      throw new BusinessRuleError('encryptionPublicKey is not a valid X25519 public key');
+    }
     return prisma.$transaction(async (tx) => {
       const election = await tx.election.create({ data: input, select: electionSelect });
       await appendAuditEvent(
@@ -58,6 +65,9 @@ export function createElectionService({ prisma, clock, signer }: ElectionService
             name: election.name,
             startsAt: election.startsAt.toISOString(),
             endsAt: election.endsAt.toISOString(),
+            encryptionPublicKey: election.encryptionPublicKey
+              ? Buffer.from(election.encryptionPublicKey).toString('hex')
+              : null,
           },
         },
         now,

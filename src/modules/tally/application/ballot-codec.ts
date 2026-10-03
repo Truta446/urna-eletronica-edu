@@ -1,4 +1,4 @@
-import { ballotCommitment } from '../../../security/ballot-crypto.js';
+import { ballotCommitment, encryptedBallotCommitment } from '../../../security/ballot-crypto.js';
 import type { DecodedChoice } from '../domain/tally.js';
 
 /** Voto como está gravado (ou publicado). */
@@ -17,6 +17,14 @@ export class UndecodableBallotError extends Error {}
 
 /** Recalcula o commitment a partir dos dados da linha: qualquer edição na linha muda o valor. */
 export function recomputeCommitment(ballot: StoredBallot): Buffer<ArrayBuffer> {
+  if (ballot.ciphertext && ballot.encapsulatedKey) {
+    return encryptedBallotCommitment({
+      ballotId: ballot.id,
+      electionId: ballot.electionId,
+      encapsulatedKey: ballot.encapsulatedKey,
+      ciphertext: ballot.ciphertext,
+    });
+  }
   return ballotCommitment({
     ballotId: ballot.id,
     electionId: ballot.electionId,

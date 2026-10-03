@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import type { PrismaClient } from '../../../database/client.js';
+import { keyPairMatches } from '../../../security/ballot-encryption.js';
 import { merkleRoot } from '../../../security/merkle.js';
+import { combineShares } from '../../../security/trustees.js';
 import { verifySignature, type Signer } from '../../../security/signing.js';
 import type { Clock } from '../../../shared/clock.js';
-import { ConflictError, IntegrityError, NotFoundError } from '../../../shared/errors/app-error.js';
+import {
+  BusinessRuleError,
+  ConflictError,
+  IntegrityError,
+  NotFoundError,
+} from '../../../shared/errors/app-error.js';
 import { appendAuditEvent, createAuditReader } from '../../audit/application/audit-log.js';
 import type { AuditActor } from '../../audit/domain/audit-chain.js';
 import { resultHash, resultStatement, sealStatement, type SealData } from '../domain/statements.js';
@@ -19,6 +26,7 @@ import {
   UndecodableBallotError,
   type StoredBallot,
 } from './ballot-codec.js';
+import { createTrusteeDecoder } from './encrypted-ballots.js';
 
 export type IntegrityFailureReason =
   | 'SEAL_MISSING'
@@ -102,7 +110,15 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
   async function loadBallots(electionId: string): Promise<StoredBallot[]> {
     return prisma.ballot.findMany({
       where: { electionId },
-      select: { id: true, electionId: true, kind: true, candidateId: true, commitment: true },
+      select: {
+        id: true,
+        electionId: true,
+        kind: true,
+        candidateId: true,
+        commitment: true,
+        encapsulatedKey: true,
+        ciphertext: true,
+      },
       orderBy: { commitment: 'asc' },
     });
   }
@@ -182,18 +198,52 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
    * já não mudam pela aplicação); a gravação é um UPDATE condicional, então duas apurações
    * concorrentes resultam em exatamente uma.
    */
+  /**
+   * v1: nada a fazer. v2: reconstrói a chave privada a partir das partes dos trustees e confere
+   * que ela corresponde à chave pública da eleição antes de abrir qualquer voto.
+   */
+  async function decoderFor(
+    encryptionPublicKey: Uint8Array | null,
+    trusteeShares?: readonly string[],
+  ): Promise<{ decode: BallotDecoder; decryptionKey: Buffer<ArrayBuffer> | null }> {
+    if (!encryptionPublicKey) {
+      if (trusteeShares?.length)
+        throw new BusinessRuleError('This election has no encrypted ballots');
+      return { decode: plainDecoder, decryptionKey: null };
+    }
+    if (!trusteeShares || trusteeShares.length < 2) {
+      throw new BusinessRuleError(
+        'Encrypted election: provide at least the threshold of trustee shares',
+      );
+    }
+    let privateKey: Buffer<ArrayBuffer>;
+    try {
+      privateKey = await combineShares(trusteeShares);
+    } catch {
+      throw new BusinessRuleError('Trustee shares are malformed');
+    }
+    if (!(await keyPairMatches(encryptionPublicKey, privateKey))) {
+      throw new BusinessRuleError('Trustee shares do not reconstruct the election key');
+    }
+    return { decode: createTrusteeDecoder(privateKey), decryptionKey: privateKey };
+  }
+
   async function tally(
     electionId: string,
     actor: AuditActor,
-    decode: BallotDecoder = plainDecoder,
+    options: { trusteeShares?: readonly string[] } = {},
   ) {
     const election = await prisma.election.findUnique({
       where: { id: electionId },
-      select: { status: true },
+      select: { status: true, encryptionPublicKey: true },
     });
     if (!election) throw new NotFoundError('Election');
     if (election.status !== 'CLOSED')
       throw new ConflictError(`Election is ${election.status}, expected CLOSED`);
+    const { decode, decryptionKey } = await decoderFor(
+      election.encryptionPublicKey,
+      options.trusteeShares,
+    );
 
     let verified: Awaited<ReturnType<typeof verifyIntegrity>>;
     let result: TallyResultData;
@@ -233,6 +283,7 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
           resultHash: hash,
           signature,
           keyId: signer.keyId,
+          decryptionKey,
           createdAt: now,
         },
       });
@@ -291,6 +342,10 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
         authorizedWithoutBallot: seal.authorizedWithoutBallot,
       },
       talliedAt: stored.createdAt.toISOString(),
+      // v2: publicada após a apuração para que qualquer um refaça a decifragem.
+      ...(stored.decryptionKey && {
+        decryptionKey: Buffer.from(stored.decryptionKey).toString('base64url'),
+      }),
     };
   }
 
@@ -298,11 +353,17 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
   async function publishedBallots(electionId: string) {
     await requireTallied(electionId);
     const ballots = await loadBallots(electionId);
+    const b64 = (bytes: Uint8Array | null | undefined) =>
+      bytes ? Buffer.from(bytes).toString('base64url') : null;
     return ballots.map((b) => ({
       id: b.id,
       commitment: Buffer.from(b.commitment).toString('hex'),
       kind: b.kind,
       candidateId: b.candidateId,
+      ...(b.ciphertext && {
+        encapsulatedKey: b64(b.encapsulatedKey),
+        ciphertext: b64(b.ciphertext),
+      }),
     }));
   }
 

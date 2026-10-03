@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '../../../database/client.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
+import { encryptChoice, type PlainChoice } from '../../../security/ballot-encryption.js';
 import {
   ballotCommitment,
+  encryptedBallotCommitment,
   idempotencyScopeKey,
   nullifierFor,
   requestFingerprint,
@@ -34,6 +36,33 @@ export interface CastBallotResult {
 class TokenNotConsumed extends Error {}
 
 type Tx = Prisma.TransactionClient;
+
+/**
+ * v2: a escolha só existe em claro na memória desta requisição. No banco ficam a chave
+ * encapsulada e o texto cifrado (tamanho fixo), com kind/candidate_id nulos.
+ * O servidor ainda VÊ a escolha ao cifrar: isto protege o dado guardado (dump, DBA, backup),
+ * não um servidor comprometido. Cifrar no cliente exigiria provas de validade (fora do escopo).
+ */
+async function encryptBallot(
+  publicKey: Uint8Array,
+  params: { ballotId: string; electionId: string; choice: PlainChoice },
+) {
+  const { encapsulatedKey, ciphertext } = await encryptChoice(
+    publicKey,
+    { electionId: params.electionId, ballotId: params.ballotId },
+    params.choice,
+  );
+  return {
+    encapsulatedKey,
+    ciphertext,
+    commitment: encryptedBallotCommitment({
+      ballotId: params.ballotId,
+      electionId: params.electionId,
+      encapsulatedKey,
+      ciphertext,
+    }),
+  };
+}
 
 interface RequestKeys {
   tokenHash: Buffer<ArrayBuffer>;
@@ -90,20 +119,39 @@ export function createBallotService({ prisma, clock }: { prisma: PrismaClient; c
       const ballotId = randomUUID();
       const kind = ballotKindOf(input.choice);
 
+      const { encryptionPublicKey } = await tx.election.findUniqueOrThrow({
+        where: { id: input.electionId },
+        select: { encryptionPublicKey: true },
+      });
+      const base = {
+        id: ballotId,
+        electionId: input.electionId,
+        nullifier: nullifierFor(input.token),
+      };
+
       await tx.ballot.create({
-        data: {
-          id: ballotId,
-          electionId: input.electionId,
-          kind,
-          candidateId,
-          nullifier: nullifierFor(input.token),
-          commitment: ballotCommitment({
-            ballotId,
-            electionId: input.electionId,
-            kind,
-            candidateId,
-          }),
-        },
+        data: encryptionPublicKey
+          ? {
+              ...base,
+              ...(await encryptBallot(encryptionPublicKey, {
+                ballotId,
+                electionId: input.electionId,
+                choice: candidateId
+                  ? { kind: 'CANDIDATE', candidateId }
+                  : { kind: kind === 'BLANK' ? 'BLANK' : 'NULL_VOTE' },
+              })),
+            }
+          : {
+              ...base,
+              kind,
+              candidateId,
+              commitment: ballotCommitment({
+                ballotId,
+                electionId: input.electionId,
+                kind,
+                candidateId,
+              }),
+            },
         select: { id: true },
       });
       await tx.idempotencyRecord.create({

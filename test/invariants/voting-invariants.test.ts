@@ -113,7 +113,16 @@ describe('INV-3: no ballot has a voterId', () => {
        WHERE table_schema = 'public' AND table_name = 'ballots'`;
     const names = columns.map((c) => c.column_name).sort();
 
-    expect(names).toEqual(['candidate_id', 'commitment', 'election_id', 'id', 'kind', 'nullifier']);
+    expect(names).toEqual([
+      'candidate_id',
+      'ciphertext',
+      'commitment',
+      'election_id',
+      'encapsulated_key',
+      'id',
+      'kind',
+      'nullifier',
+    ]);
     for (const { column_name, data_type } of columns) {
       expect(column_name).not.toMatch(/voter|session|token|created|time|_at$/);
       expect(data_type).not.toMatch(/timestamp|date|time/);

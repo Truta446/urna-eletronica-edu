@@ -53,6 +53,8 @@ describe('POST /admin/elections', () => {
       startsAt: payload.startsAt,
       endsAt: payload.endsAt,
       createdAt: expect.any(String) as unknown,
+      ballotEncryption: 'NONE',
+      encryptionPublicKey: null,
     });
   });
 

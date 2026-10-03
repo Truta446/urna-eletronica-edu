@@ -204,7 +204,16 @@ describe('ballot storage', () => {
     await castBallot(t, { token, electionId });
     const rows = await t.prisma.$queryRaw<Record<string, unknown>[]>`SELECT * FROM ballots`;
     expect(Object.keys(rows[0] ?? {}).sort()).toEqual(
-      ['candidate_id', 'commitment', 'election_id', 'id', 'kind', 'nullifier'].sort(),
+      [
+        'candidate_id',
+        'ciphertext',
+        'commitment',
+        'election_id',
+        'encapsulated_key',
+        'id',
+        'kind',
+        'nullifier',
+      ].sort(),
     );
   });
 

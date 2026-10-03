@@ -85,10 +85,14 @@ export async function authorizeVoter({ app }: TestApp, electionId: string, cpf: 
 export async function createVotingElection(
   t: TestApp,
   clock: FakeClock,
-  options: { voters?: number; candidates?: number[] } = {},
+  options: { voters?: number; candidates?: number[]; encryptionPublicKey?: string } = {},
 ): Promise<{ election: ElectionBody; cpfs: string[] }> {
-  const { voters = 1, candidates = [10, 20] } = options;
-  const election = await createElection(t, clock.now());
+  const { voters = 1, candidates = [10, 20], encryptionPublicKey } = options;
+  const election = await createElection(
+    t,
+    clock.now(),
+    encryptionPublicKey ? { encryptionPublicKey } : {},
+  );
   for (const number of candidates) {
     expect((await addCandidate(t, election.id, { number, name: `C${number}` })).statusCode).toBe(
       201,
@@ -127,7 +131,7 @@ export async function castBallot({ app }: TestApp, options: CastOptions) {
 export async function createElectionWithTokens(
   t: TestApp,
   clock: FakeClock,
-  options: { voters?: number; candidates?: number[] } = {},
+  options: { voters?: number; candidates?: number[]; encryptionPublicKey?: string } = {},
 ): Promise<{ election: ElectionBody; tokens: string[] }> {
   const { election, cpfs } = await createVotingElection(t, clock, options);
   const tokens: string[] = [];
