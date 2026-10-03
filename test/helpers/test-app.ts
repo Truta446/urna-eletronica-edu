@@ -24,6 +24,10 @@ export const VOTER_ID_PEPPER = randomBytes(32);
 
 export interface TestApp {
   app: FastifyInstance;
+  /**
+   * Conexão como DONO do schema, para os testes prepararem cenários, conferirem o banco e
+   * simularem atacantes. A aplicação usa outra conexão, com a role de menor privilégio.
+   */
   prisma: PrismaClient;
   /** Linhas de log emitidas pela aplicação (JSON já parseado). */
   logs: Record<string, unknown>[];
@@ -44,12 +48,15 @@ function captureLogs(sink: Record<string, unknown>[]): Writable {
 export interface TestAppOptions {
   databaseUrl?: string;
   clock?: Clock;
+  /** Desligado por padrão: os testes de concorrência disparam centenas de requisições. */
+  rateLimitPerMinute?: number;
 }
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
-  const prisma = createPrismaClient(options.databaseUrl ?? inject('databaseUrl'));
+  const prisma = createPrismaClient(inject('ownerDatabaseUrl'));
+  const appPrisma = createPrismaClient(options.databaseUrl ?? inject('databaseUrl'));
   const logs: Record<string, unknown>[] = [];
-  const app = buildApp({
+  const app = await buildApp({
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'info',
@@ -58,8 +65,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       VOTER_ID_PEPPER,
       VOTING_SESSION_TTL_SECONDS,
       SIGNING_PRIVATE_KEY,
+      RATE_LIMIT_PER_MINUTE: options.rateLimitPerMinute ?? 0,
     },
-    prisma,
+    prisma: appPrisma,
     ...(options.clock && { clock: options.clock }),
     logStream: captureLogs(logs),
   });
@@ -71,6 +79,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     logs,
     close: async () => {
       await app.close();
+      await appPrisma.$disconnect();
       await prisma.$disconnect();
     },
   };

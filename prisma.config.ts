@@ -11,5 +11,6 @@ try {
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: { path: 'prisma/migrations' },
-  datasource: { url: env('DATABASE_URL') },
+  // Migrations rodam como DONO do schema; a aplicação usa DATABASE_URL (role urna_app).
+  datasource: { url: env('MIGRATION_DATABASE_URL') },
 });

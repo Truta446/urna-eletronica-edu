@@ -3,17 +3,19 @@ import type { TestProject } from 'vitest/node';
 
 declare module 'vitest' {
   export interface ProvidedContext {
+    /** Role de menor privilégio (urna_app): é com ela que a APLICAÇÃO conecta nos testes. */
     databaseUrl: string;
+    /** Dono do schema: usado pelos testes para preparar cenários e simular atacantes. */
+    ownerDatabaseUrl: string;
   }
 }
 
 /**
  * Trava de segurança: a suíte trunca tabelas, então só roda contra um banco cujo nome termina em `_test`.
  */
-function resolveTestDatabaseUrl(): string {
-  const url = process.env.TEST_DATABASE_URL;
-  if (!url) throw new Error('TEST_DATABASE_URL is not set (see .env.example)');
-
+function requireTestUrl(name: string): string {
+  const url = process.env[name];
+  if (!url) throw new Error(`${name} is not set (see .env.example)`);
   const databaseName = new URL(url).pathname.slice(1);
   if (!databaseName.endsWith('_test')) {
     throw new Error(`Refusing to run tests against non-test database "${databaseName}"`);
@@ -28,10 +30,15 @@ export function setup(project: TestProject): void {
     // Sem .env: usa apenas o ambiente (ex.: CI).
   }
 
-  const databaseUrl = resolveTestDatabaseUrl();
-  execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
-    env: { ...process.env, DATABASE_URL: databaseUrl },
+  const databaseUrl = requireTestUrl('TEST_DATABASE_URL');
+  const ownerDatabaseUrl = requireTestUrl('TEST_MIGRATION_DATABASE_URL');
+  const env = { ...process.env, MIGRATION_DATABASE_URL: ownerDatabaseUrl };
+  execFileSync('npx', ['prisma', 'migrate', 'deploy'], { env, stdio: 'pipe' });
+  execFileSync('npx', ['tsx', 'scripts/setup-app-role.ts', 'test'], {
+    env: process.env,
     stdio: 'pipe',
   });
+
   project.provide('databaseUrl', databaseUrl);
+  project.provide('ownerDatabaseUrl', ownerDatabaseUrl);
 }
