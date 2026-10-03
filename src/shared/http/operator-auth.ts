@@ -10,8 +10,9 @@ import { UnauthorizedError } from '../errors/app-error.js';
  */
 export type OperatorRole = 'ADMIN' | 'POLL_WORKER';
 
+/** Mesmo formato de `AuditActor`: o operador autenticado é o autor do evento de auditoria. */
 export interface Operator {
-  role: OperatorRole;
+  type: OperatorRole;
   id: string;
 }
 
@@ -41,13 +42,18 @@ export function findOperator(
   for (const credential of credentials) {
     if (constantTimeEqual(credential.tokenHash, presented)) matched = credential;
   }
-  return matched ? { role, id: matched.label } : undefined;
+  return matched ? { type: role, id: matched.label } : undefined;
 }
 
 /**
  * Hook `onRequest`: roda ANTES do parse do body, então quem não se autenticou não consegue
  * fazer o servidor processar payload nenhum. Falhas têm resposta idêntica, qualquer que seja o motivo.
  */
+export function getOperator(request: FastifyRequest): Operator {
+  if (!request.operator) throw new UnauthorizedError();
+  return request.operator;
+}
+
 export function requireOperator(role: OperatorRole, credentials: readonly OperatorCredential[]) {
   return (request: FastifyRequest): Promise<void> => {
     const token = extractBearerToken(request.headers.authorization);

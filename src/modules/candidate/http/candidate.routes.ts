@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { displayName, electionIdParams } from '../../../shared/validation.js';
 import type { CandidateService } from '../application/candidate.service.js';
 import { MAX_CANDIDATE_NUMBER, MIN_CANDIDATE_NUMBER } from '../domain/candidate.js';
+import { getOperator } from '../../../shared/http/operator-auth.js';
 
 const createCandidateBody = z.strictObject({
   // Sem coerção: "42" (string) é rejeitado; o contrato é número inteiro.
@@ -22,7 +23,7 @@ export function registerCandidateRoutes(
     async (request, reply) => {
       const { id } = electionIdParams.parse(request.params);
       const body = createCandidateBody.parse(request.body);
-      return reply.status(201).send(await candidates.create(id, body));
+      return reply.status(201).send(await candidates.create(id, body, getOperator(request)));
     },
   );
 

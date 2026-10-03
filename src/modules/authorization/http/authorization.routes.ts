@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { electionIdParams } from '../../../shared/validation.js';
 import { voterIdentifier } from '../../voter/http/voter.routes.js';
 import type { AuthorizationService } from '../application/authorization.service.js';
+import { getOperator } from '../../../shared/http/operator-auth.js';
 
 const authorizeVoterBody = z.strictObject({ voterIdentifier });
 
@@ -18,7 +19,7 @@ export function registerAuthorizationRoutes(
     async (request, reply) => {
       const { id } = electionIdParams.parse(request.params);
       const body = authorizeVoterBody.parse(request.body);
-      const issued = await authorization.authorize(id, body.voterIdentifier);
+      const issued = await authorization.authorize(id, body.voterIdentifier, getOperator(request));
 
       // A resposta carrega um segredo: nenhum cache intermediário pode guardá-la.
       return reply

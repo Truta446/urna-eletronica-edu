@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
 import type { PrismaClient } from './database/client.js';
+import { createAuditReader } from './modules/audit/application/audit-log.js';
+import { registerAuditRoutes } from './modules/audit/http/audit.routes.js';
 import { createAuthorizationService } from './modules/authorization/application/authorization.service.js';
 import { registerAuthorizationRoutes } from './modules/authorization/http/authorization.routes.js';
 import { createBallotService } from './modules/ballot-box/application/ballot.service.js';
@@ -68,11 +70,11 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     requireAdmin: adminOnly,
   });
   registerCandidateRoutes(app, {
-    candidates: createCandidateService({ prisma }),
+    candidates: createCandidateService({ prisma, clock }),
     requireAdmin: adminOnly,
   });
   registerVoterRoutes(app, {
-    voters: createVoterService({ prisma, hashVoterIdentifier }),
+    voters: createVoterService({ prisma, clock, hashVoterIdentifier }),
     requireAdmin: adminOnly,
   });
   registerAuthorizationRoutes(app, {
@@ -85,6 +87,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     requirePollWorker: pollWorkerOnly,
   });
   registerBallotRoutes(app, { ballots: createBallotService({ prisma, clock }) });
+  registerAuditRoutes(app, { audit: createAuditReader({ prisma }), requireAdmin: adminOnly });
 
   return app;
 }

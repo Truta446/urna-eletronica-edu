@@ -5,6 +5,8 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../../shared/errors/app-error.js';
+import { appendAuditEvent } from '../../audit/application/audit-log.js';
+import { SYSTEM_ACTOR, type AuditActor } from '../../audit/domain/audit-chain.js';
 import { validateNewSchedule, type Election, type ElectionStatus } from '../domain/election.js';
 
 export interface ElectionServiceDeps {
@@ -38,27 +40,51 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
     return new ConflictError(`Election is ${actual}, expected ${expected}`);
   }
 
-  async function create(input: CreateElectionInput): Promise<Election> {
-    validateNewSchedule(input, clock.now());
-    return prisma.election.create({ data: input, select: electionSelect });
+  async function create(input: CreateElectionInput, actor: AuditActor): Promise<Election> {
+    const now = clock.now();
+    validateNewSchedule(input, now);
+    return prisma.$transaction(async (tx) => {
+      const election = await tx.election.create({ data: input, select: electionSelect });
+      await appendAuditEvent(
+        tx,
+        {
+          eventType: 'ELECTION_CREATED',
+          actor,
+          electionId: election.id,
+          payload: {
+            name: election.name,
+            startsAt: election.startsAt.toISOString(),
+            endsAt: election.endsAt.toISOString(),
+          },
+        },
+        now,
+      );
+      return election;
+    });
   }
 
   /**
    * A transição é um único UPDATE condicional: verificar e alterar acontecem atomicamente
    * no banco. Se nada for alterado, uma leitura posterior só serve para explicar o motivo.
    */
-  async function open(id: string): Promise<Election> {
+  async function open(id: string, actor: AuditActor): Promise<Election> {
     const now = clock.now();
-    const [opened] = await prisma.election.updateManyAndReturn({
-      where: {
-        id,
-        status: 'DRAFT',
-        endsAt: { gt: now },
-        candidates: { some: {} },
-        voters: { some: {} },
-      },
-      data: { status: 'OPEN' },
-      select: electionSelect,
+    const opened = await prisma.$transaction(async (tx) => {
+      const [updated] = await tx.election.updateManyAndReturn({
+        where: {
+          id,
+          status: 'DRAFT',
+          endsAt: { gt: now },
+          candidates: { some: {} },
+          voters: { some: {} },
+        },
+        data: { status: 'OPEN' },
+        select: electionSelect,
+      });
+      if (updated) {
+        await appendAuditEvent(tx, { eventType: 'ELECTION_OPENED', actor, electionId: id }, now);
+      }
+      return updated;
     });
     if (opened) return opened;
 
@@ -70,10 +96,14 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
 
   /**
    * Só depois de endsAt: um administrador não pode encerrar a votação antes da hora.
-   * Na mesma transação, apaga os registros de idempotência: depois do fechamento não há
-   * retry possível, e eles são a única tabela que guarda respostas ligadas a tokens.
+   * Na mesma transação:
+   *  - apaga os registros de idempotência (depois do fechamento não há retry possível);
+   *  - lacra a urna: BALLOT_BOX_SEALED registra as contagens finais. O UPDATE da eleição espera
+   *    as transações de voto em andamento (elas seguram FOR SHARE na linha da eleição), e
+   *    depois dele nenhum voto entra. As contagens são, portanto, definitivas.
+   *    (A Merkle root dos votos entra neste evento na Fase 7.)
    */
-  async function close(id: string): Promise<Election> {
+  async function close(id: string, actor: AuditActor): Promise<Election> {
     const now = clock.now();
     const closed = await prisma.$transaction(async (tx) => {
       const [updated] = await tx.election.updateManyAndReturn({
@@ -81,7 +111,34 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
         data: { status: 'CLOSED' },
         select: electionSelect,
       });
-      if (updated) await tx.idempotencyRecord.deleteMany({ where: { electionId: id } });
+      if (!updated) return undefined;
+
+      const purged = await tx.idempotencyRecord.deleteMany({ where: { electionId: id } });
+      const [ballots, consumedSessions, authorizedVoters, registeredVoters] = await Promise.all([
+        tx.ballot.count({ where: { electionId: id } }),
+        tx.votingSession.count({ where: { electionId: id, consumed: true } }),
+        tx.voter.count({ where: { electionId: id, hasVoted: true } }),
+        tx.voter.count({ where: { electionId: id } }),
+      ]);
+
+      await appendAuditEvent(tx, { eventType: 'ELECTION_CLOSED', actor, electionId: id }, now);
+      await appendAuditEvent(
+        tx,
+        {
+          eventType: 'BALLOT_BOX_SEALED',
+          actor: SYSTEM_ACTOR,
+          electionId: id,
+          payload: {
+            ballots,
+            consumedSessions,
+            authorizedVoters,
+            registeredVoters,
+            authorizedWithoutBallot: authorizedVoters - ballots,
+            idempotencyRecordsPurged: purged.count,
+          },
+        },
+        now,
+      );
       return updated;
     });
     if (closed) return closed;

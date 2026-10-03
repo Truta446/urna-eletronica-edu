@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { electionIdParams } from '../../../shared/validation.js';
 import type { VoterService } from '../application/voter.service.js';
 import { normalizeCpf } from '../domain/cpf.js';
+import { getOperator } from '../../../shared/http/operator-auth.js';
 
 /** A mensagem de erro nunca inclui o valor recebido (é dado pessoal). */
 export const voterIdentifier = z
@@ -26,6 +27,8 @@ export function registerVoterRoutes(
   app.post('/admin/elections/:id/voters', { onRequest: requireAdmin }, async (request, reply) => {
     const { id } = electionIdParams.parse(request.params);
     const body = registerVoterBody.parse(request.body);
-    return reply.status(201).send(await voters.register(id, body.voterIdentifier));
+    return reply
+      .status(201)
+      .send(await voters.register(id, body.voterIdentifier, getOperator(request)));
   });
 }

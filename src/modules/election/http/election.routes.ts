@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { displayName, electionIdParams, isoDateTime } from '../../../shared/validation.js';
 import type { ElectionService } from '../application/election.service.js';
 import type { Election } from '../domain/election.js';
+import { getOperator } from '../../../shared/http/operator-auth.js';
 
 const createElectionBody = z.strictObject({
   name: displayName,
@@ -29,18 +30,18 @@ export function registerElectionRoutes(
 
   app.post('/admin/elections', { onRequest: requireAdmin }, async (request, reply) => {
     const body = createElectionBody.parse(request.body);
-    const election = await elections.create(body);
+    const election = await elections.create(body, getOperator(request));
     return reply.status(201).send(toElectionResponse(election));
   });
 
   app.post('/admin/elections/:id/open', { onRequest: requireAdmin }, async (request) => {
     const { id } = electionIdParams.parse(request.params);
-    return toElectionResponse(await elections.open(id));
+    return toElectionResponse(await elections.open(id, getOperator(request)));
   });
 
   app.post('/admin/elections/:id/close', { onRequest: requireAdmin }, async (request) => {
     const { id } = electionIdParams.parse(request.params);
-    return toElectionResponse(await elections.close(id));
+    return toElectionResponse(await elections.close(id, getOperator(request)));
   });
 
   app.get('/elections/:id', async (request) => {

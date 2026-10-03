@@ -3,6 +3,8 @@ import { generateToken, hashToken } from '../../../security/tokens.js';
 import type { VoterIdentifierHasher } from '../../../security/voter-identifier.js';
 import type { Clock } from '../../../shared/clock.js';
 import { ConflictError, NotFoundError } from '../../../shared/errors/app-error.js';
+import { appendAuditEvent } from '../../audit/application/audit-log.js';
+import type { AuditActor } from '../../audit/domain/audit-chain.js';
 
 export interface AuthorizationServiceDeps {
   prisma: PrismaClient;
@@ -31,6 +33,7 @@ export function createAuthorizationService(deps: AuthorizationServiceDeps) {
   async function authorize(
     electionId: string,
     normalizedIdentifier: string,
+    actor: AuditActor,
   ): Promise<IssuedVotingToken> {
     const now = clock.now();
     const token = generateToken();
@@ -38,7 +41,8 @@ export function createAuthorizationService(deps: AuthorizationServiceDeps) {
     const identifierHmac = hashVoterIdentifier(electionId, normalizedIdentifier);
     const requestedExpiry = new Date(now.getTime() + sessionTtlSeconds * 1000);
 
-    const [issued] = await prisma.$queryRaw<{ expires_at: Date }[]>`
+    const issued = await prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ expires_at: Date }[]>`
       WITH election AS (
         SELECT id, ends_at FROM elections
          WHERE id = ${electionId}::uuid
@@ -57,6 +61,13 @@ export function createAuthorizationService(deps: AuthorizationServiceDeps) {
       SELECT election_id, ${tokenHash}, LEAST(${requestedExpiry}::timestamptz, ends_at)
         FROM voter
       RETURNING expires_at`;
+      if (!row) return undefined;
+
+      // SEM voterId de propósito: o horário deste evento é o mesmo instante usado em
+      // expires_at da sessão. Com o eleitor aqui, um dump lógico ligaria eleitor e sessão.
+      await appendAuditEvent(tx, { eventType: 'VOTER_AUTHORIZED', actor, electionId }, now);
+      return row;
+    });
 
     if (issued) return { token, expiresAt: issued.expires_at };
     throw await explainRefusal(electionId, identifierHmac, now);
