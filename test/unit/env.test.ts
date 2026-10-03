@@ -1,19 +1,24 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { InvalidEnvironmentError, loadEnv } from '../../src/config/env.js';
 
 const HASH = 'a'.repeat(64);
 const POLL_HASH = 'b'.repeat(64);
 const PEPPER = Buffer.alloc(32, 7);
+const SIGNING_KEY = generateKeyPairSync('ed25519').privateKey;
 const validEnv = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
   ADMIN_CREDENTIALS: `alice:${HASH}`,
   POLL_WORKER_CREDENTIALS: `mesario:${POLL_HASH}`,
   VOTER_ID_PEPPER: PEPPER.toString('base64url'),
+  SIGNING_PRIVATE_KEY: SIGNING_KEY.export({ format: 'der', type: 'pkcs8' }).toString('base64url'),
 };
 
 describe('loadEnv', () => {
   it('applies safe defaults', () => {
-    expect(loadEnv(validEnv)).toEqual({
+    const { SIGNING_PRIVATE_KEY, ...env } = loadEnv(validEnv);
+    expect(SIGNING_PRIVATE_KEY.equals(SIGNING_KEY)).toBe(true);
+    expect(env).toEqual({
       NODE_ENV: 'development',
       HOST: '127.0.0.1',
       PORT: 3000,
@@ -31,6 +36,21 @@ describe('loadEnv', () => {
   });
 
   it.each([
+    [
+      'missing SIGNING_PRIVATE_KEY',
+      { ...validEnv, SIGNING_PRIVATE_KEY: undefined },
+      'SIGNING_PRIVATE_KEY',
+    ],
+    [
+      'non-Ed25519 SIGNING_PRIVATE_KEY',
+      {
+        ...validEnv,
+        SIGNING_PRIVATE_KEY: generateKeyPairSync('x25519')
+          .privateKey.export({ format: 'der', type: 'pkcs8' })
+          .toString('base64url'),
+      },
+      'SIGNING_PRIVATE_KEY',
+    ],
     [
       'missing POLL_WORKER_CREDENTIALS',
       { ...validEnv, POLL_WORKER_CREDENTIALS: undefined },

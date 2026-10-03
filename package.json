@@ -2,7 +2,7 @@
   "name": "urna-eletronica-edu",
   "version": "0.1.0",
   "private": true,
-  "description": "Protótipo educacional de backend de urna eletrônica. Não use em eleições reais.",
+  "description": "Prot\u00f3tipo educacional de backend de urna eletr\u00f4nica. N\u00e3o use em elei\u00e7\u00f5es reais.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -22,7 +22,9 @@
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
     "secret:generate": "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url') + '\\n')\"",
-    "operator:token": "tsx scripts/operator-token.ts"
+    "operator:token": "tsx scripts/operator-token.ts",
+    "signing-key:generate": "tsx scripts/signing-key.ts",
+    "verify:result": "tsx scripts/verify-result.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

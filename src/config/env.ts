@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { operatorCredentialsSchema } from '../security/operator-credentials.js';
+import { signingKeySchema } from '../security/signing.js';
 import { pepperSchema } from '../security/voter-identifier.js';
 
 const envSchema = z
@@ -15,6 +16,7 @@ const envSchema = z
     POLL_WORKER_CREDENTIALS: operatorCredentialsSchema,
     VOTING_SESSION_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
     VOTER_ID_PEPPER: pepperSchema,
+    SIGNING_PRIVATE_KEY: signingKeySchema,
   })
   .superRefine((env, ctx) => {
     // Separação de funções: um mesmo token não pode valer como admin E como mesário.
