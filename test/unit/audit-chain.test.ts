@@ -16,6 +16,8 @@ function buildChain(length: number): StoredAuditEvent[] {
   let previousHash: Uint8Array = GENESIS_HASH;
   for (let seq = 1; seq <= length; seq++) {
     const data: AuditEventData = {
+      format: 2,
+      chainKey: electionId,
       seq,
       eventType: 'CANDIDATE_CREATED',
       actorType: 'ADMIN',
@@ -60,6 +62,40 @@ describe('canonicalEventData (RFC 8785)', () => {
     expect(computeEventHash({ ...event, seq: 2 }, GENESIS_HASH)).not.toEqual(
       computeEventHash(event, GENESIS_HASH),
     );
+  });
+});
+
+describe('chain formats', () => {
+  const base: AuditEventData = {
+    format: 1,
+    chainKey: 'global',
+    seq: 7,
+    eventType: 'ELECTION_OPENED',
+    actorType: 'ADMIN',
+    actorIdentifier: 'alice',
+    electionId,
+    payload: {},
+    createdAt: new Date(Date.UTC(2030, 0, 1)),
+  };
+
+  it('format 1 hashes exactly the legacy fields (old events stay verifiable)', () => {
+    expect(JSON.parse(canonicalEventData(base))).toEqual({
+      seq: 7,
+      eventType: 'ELECTION_OPENED',
+      actorType: 'ADMIN',
+      actorIdentifier: 'alice',
+      electionId,
+      payload: {},
+      createdAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('format 2 binds the event to its chain: moving it to another chain changes the hash', () => {
+    const v2 = { ...base, format: 2 as const, chainKey: electionId };
+    expect(computeEventHash(v2, GENESIS_HASH)).not.toEqual(
+      computeEventHash({ ...v2, chainKey: randomUUID() }, GENESIS_HASH),
+    );
+    expect(computeEventHash(v2, GENESIS_HASH)).not.toEqual(computeEventHash(base, GENESIS_HASH));
   });
 });
 

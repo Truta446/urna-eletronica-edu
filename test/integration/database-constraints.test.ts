@@ -547,6 +547,8 @@ describe('audit_events table', () => {
   function insertEvent(seq: number, previousHash: Uint8Array<ArrayBuffer>) {
     return t.prisma.auditEvent.create({
       data: {
+        chainKey: 'global',
+        format: 1,
         seq,
         eventType: 'ELECTION_CREATED',
         actorType: 'ADMIN',
@@ -579,6 +581,28 @@ describe('audit_events table', () => {
     );
   });
 
+  it('rejects a format-2 event whose chain is not its own election', async () => {
+    const election = await insertElection('DRAFT');
+    const state = await sqlStateOf(
+      t.prisma.auditEvent.create({
+        data: {
+          chainKey: 'some-other-chain',
+          format: 2,
+          seq: 1,
+          electionId: election.id,
+          eventType: 'ELECTION_CREATED',
+          actorType: 'ADMIN',
+          actorIdentifier: 'direct-sql',
+          payload: {},
+          previousHash: zero,
+          eventHash: randomBytes(32),
+          createdAt: new Date(),
+        },
+      }),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+
   it('rejects two events with the same seq (no forks)', async () => {
     const first = await insertEvent(1, zero);
     await insertEvent(2, Buffer.from(first.eventHash));
@@ -609,9 +633,10 @@ describe('audit_events table', () => {
   it('rejects a payload that is not a JSON object', async () => {
     const state = await sqlStateOf(
       t.prisma.$executeRaw`
-        INSERT INTO audit_events (seq, event_type, actor_type, actor_identifier, payload,
-                                  previous_hash, event_hash, created_at)
-        VALUES (1, 'ELECTION_CREATED', 'ADMIN', 'x', '[1,2]'::jsonb, ${zero}, ${randomBytes(32)}, now())`,
+        INSERT INTO audit_events (chain_key, format, seq, event_type, actor_type, actor_identifier,
+                                  payload, previous_hash, event_hash, created_at)
+        VALUES ('global', 1, 1, 'ELECTION_CREATED', 'ADMIN', 'x', '[1,2]'::jsonb, ${zero},
+                ${randomBytes(32)}, now())`,
     );
     expect(state).toBe(SqlState.CHECK_VIOLATION);
   });

@@ -11,6 +11,7 @@ import { adminHeaders, createTestApp, type TestApp } from '../helpers/test-app.j
  * proteção e edita a tabela diretamente. A prevenção falhou; a detecção não pode falhar.
  */
 const clock = createFakeClock();
+let electionId = '';
 let t: TestApp;
 
 beforeAll(async () => {
@@ -19,6 +20,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await resetDatabase(t.prisma);
   const election = await createElection(t, clock.now());
+  electionId = election.id;
   for (const number of [1, 2, 3, 4])
     await addCandidate(t, election.id, { number, name: `C${number}` });
   // seq 1 = ELECTION_CREATED; seq 2..5 = CANDIDATE_CREATED
@@ -33,7 +35,7 @@ async function verify(query = '') {
   });
   return response.json<{
     valid: boolean;
-    failure?: { seq: number; reason: string };
+    failure?: { seq: number; reason: string; chain?: string };
     head?: { seq: number; hash: string };
   }>();
 }
@@ -96,14 +98,29 @@ describe('INV-5: tampering with audit events breaks verifyAuditChain()', () => {
     expect(await verify()).toMatchObject({ valid: false, failure: { seq: 2 } });
   });
 
+  it("detects an election's ENTIRE chain being deleted", async () => {
+    await asSuperuser(`DELETE FROM audit_events WHERE chain_key = '${electionId}'`);
+    expect(await verify()).toMatchObject({
+      valid: false,
+      failure: { chain: electionId, reason: 'ELECTION_WITHOUT_AUDIT' },
+    });
+  });
+
+  it('detects an election chain that does not start with ELECTION_CREATED', async () => {
+    await asSuperuser(`DELETE FROM audit_events WHERE chain_key = '${electionId}' AND seq = 1`);
+    expect(await verify()).toMatchObject({ valid: false });
+  });
+
   it('LIMITATION: deleting the tail is invisible without an anchor, visible with one', async () => {
-    const before = await verify();
+    const before = await verify(`?electionId=${electionId}`);
     if (!before.head) throw new Error('empty chain');
     await asSuperuser('DELETE FROM audit_events WHERE seq >= 4');
 
     expect(await verify()).toMatchObject({ valid: true });
     expect(
-      await verify(`?anchorSeq=${before.head.seq}&anchorHash=${before.head.hash}`),
+      await verify(
+        `?electionId=${electionId}&anchorSeq=${before.head.seq}&anchorHash=${before.head.hash}`,
+      ),
     ).toMatchObject({
       valid: false,
       failure: { reason: 'ANCHOR_NOT_FOUND' },

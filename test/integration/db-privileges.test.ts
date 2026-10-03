@@ -66,6 +66,15 @@ describe('the application role', () => {
     ['fake the authorization balance', `UPDATE authorization_counters SET sessions = sessions + 1`],
     ['fake the ballot balance', `UPDATE ballot_counters SET ballots = ballots + 1`],
     ['insert counters', `INSERT INTO ballot_counters (election_id) SELECT gen_random_uuid()`],
+    [
+      'mark an election as created before the audit log',
+      `UPDATE elections SET created_before_audit = true`,
+    ],
+    [
+      'insert an election that skips the audit completeness check',
+      `INSERT INTO elections (name, starts_at, ends_at, created_before_audit)
+       VALUES ('x', now() + interval '1 hour', now() + interval '2 hours', true)`,
+    ],
   ])('cannot %s (42501)', async (_label, sql) => {
     expect(await sqlStateAsApp(sql)).toBe(INSUFFICIENT_PRIVILEGE);
   });

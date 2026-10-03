@@ -31,6 +31,7 @@ beforeEach(async () => {
 afterAll(() => t.close());
 
 interface EventBody {
+  id: number;
   seq: number;
   eventType: string;
   actorType: string;
@@ -59,7 +60,9 @@ async function verify(query = '') {
   return response.json<{
     valid: boolean;
     eventCount: number;
-    head: { seq: number; hash: string } | null;
+    chains?: number;
+    chain?: string;
+    head?: { seq: number; hash: string } | null;
   }>();
 }
 
@@ -186,8 +189,11 @@ describe('audit events', () => {
       a.id,
       a.id,
     ]);
-    const page = await listEvents('?afterSeq=1&limit=2');
-    expect(page.map((e) => e.seq)).toEqual([2, 3]);
+    // Cada eleição tem a própria cadeia (seq 1, 2 em cada); a paginação usa o id global.
+    expect((await listEvents(`?electionId=${b.id}`)).map((e) => e.seq)).toEqual([1, 2]);
+    const all = await listEvents();
+    const page = await listEvents(`?afterId=${all[0]?.id ?? 0}&limit=2`);
+    expect(page.map((e) => e.id)).toEqual(all.slice(1, 3).map((e) => e.id));
   });
 
   it('audit endpoints are admin-only', async () => {
@@ -241,16 +247,61 @@ describe('chain consistency', () => {
     expect(result).toMatchObject({ valid: true });
     const total = await t.prisma.auditEvent.count();
     expect(result.eventCount).toBe(total);
-    expect(result.head?.seq).toBe(total);
+    expect(result.chains).toBe(11); // 1 eleição com as habilitações + 10 criadas em paralelo
   });
 
-  it('verify accepts a matching anchor', async () => {
-    await createElection(t, clock.now());
-    const { head } = await verify();
+  it('verify accepts a matching anchor on an election chain', async () => {
+    const election = await createElection(t, clock.now());
+    const { head } = await verify(`?electionId=${election.id}`);
     if (!head) throw new Error('empty chain');
-    await createElection(t, clock.now()); // a cadeia cresce depois da âncora: continua válida
-    expect(await verify(`?anchorSeq=${head.seq}&anchorHash=${head.hash}`)).toMatchObject({
-      valid: true,
+    await addCandidate(t, election.id, { number: 1, name: 'A' }); // a cadeia cresce: continua válida
+    expect(
+      await verify(`?electionId=${election.id}&anchorSeq=${head.seq}&anchorHash=${head.hash}`),
+    ).toMatchObject({ valid: true, chain: election.id });
+  });
+
+  it('elections created before the per-election chains keep using the legacy global chain', async () => {
+    const election = await createElection(t, clock.now());
+    // Simula o legado: a cadeia global já contém o ELECTION_CREATED desta eleição.
+    await t.prisma.$transaction([
+      t.prisma.$executeRawUnsafe('ALTER TABLE audit_events DISABLE TRIGGER USER'),
+      t.prisma.$executeRawUnsafe('TRUNCATE audit_events'),
+      t.prisma.$executeRawUnsafe('ALTER TABLE audit_events ENABLE TRIGGER USER'),
+    ]);
+    const { appendAuditEvent } = await import('../../src/modules/audit/application/audit-log.js');
+    const { computeEventHash, GENESIS_HASH } =
+      await import('../../src/modules/audit/domain/audit-chain.js');
+    const legacy = {
+      format: 1 as const,
+      chainKey: 'global',
+      seq: 1,
+      eventType: 'ELECTION_CREATED' as const,
+      actorType: 'ADMIN' as const,
+      actorIdentifier: 'legacy',
+      electionId: election.id,
+      payload: {},
+      createdAt: new Date('2029-12-31T00:00:00Z'),
+    };
+    await t.prisma.auditEvent.create({
+      data: {
+        ...legacy,
+        previousHash: GENESIS_HASH,
+        eventHash: computeEventHash(legacy, GENESIS_HASH),
+      },
     });
+
+    const appended = await t.prisma.$transaction((tx) =>
+      appendAuditEvent(
+        tx,
+        {
+          eventType: 'ELECTION_OPENED',
+          actor: { type: 'ADMIN', id: 'x' },
+          electionId: election.id,
+        },
+        clock.now(),
+      ),
+    );
+    expect(appended).toMatchObject({ chainKey: 'global', seq: 2 });
+    expect(await verify()).toMatchObject({ valid: true, chains: 1 });
   });
 });
