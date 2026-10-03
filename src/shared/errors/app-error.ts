@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'BUSINESS_RULE_VIOLATION'
   | 'INTERNAL_ERROR';
 
 /**
@@ -43,5 +44,12 @@ export class UnauthorizedError extends AppError {
 export class ForbiddenError extends AppError {
   constructor(message = 'Forbidden') {
     super('FORBIDDEN', 403, message);
+  }
+}
+
+/** Entrada bem formada, mas que viola uma regra de negócio (ex.: eleição terminando no passado). */
+export class BusinessRuleError extends AppError {
+  constructor(message: string) {
+    super('BUSINESS_RULE_VIOLATION', 422, message);
   }
 }

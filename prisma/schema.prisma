@@ -1,4 +1,3 @@
-// Modelos de domínio entram a partir da Fase 2.
 // Invariantes que o Prisma não expressa (CHECK, triggers, roles) ficam em SQL nas migrations.
 
 generator client {
@@ -10,4 +9,40 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum ElectionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  TALLIED
+
+  @@map("election_status")
+}
+
+/// Transições e congelamento de campos são garantidos por trigger (ver migration).
+model Election {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  status     ElectionStatus @default(DRAFT)
+  startsAt   DateTime       @map("starts_at") @db.Timestamptz(3)
+  endsAt     DateTime       @map("ends_at") @db.Timestamptz(3)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  candidates Candidate[]
+
+  @@map("elections")
+}
+
+/// Só pode ser criado/alterado/removido enquanto a eleição está em DRAFT (trigger).
+model Candidate {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  electionId String   @map("election_id") @db.Uuid
+  number     Int
+  name       String
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([electionId, number])
+  /// Alvo da FK composta de ballots: garante que o candidato votado pertence à mesma eleição.
+  @@unique([electionId, id])
+  @@map("candidates")
 }

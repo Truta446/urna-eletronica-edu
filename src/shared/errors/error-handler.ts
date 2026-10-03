@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
+import { describeDatabaseError, mapDatabaseError } from '../../database/errors.js';
 import { AppError, type ErrorCode } from './app-error.js';
 
 interface ErrorBody {
@@ -30,6 +31,13 @@ export function registerErrorHandling(app: FastifyInstance): void {
       return send(reply, error.statusCode, { error: { code: error.code, message: error.message } });
     }
 
+    const mapped = mapDatabaseError(error);
+    if (mapped) {
+      return send(reply, mapped.statusCode, {
+        error: { code: mapped.code, message: mapped.message },
+      });
+    }
+
     if (error instanceof ZodError) {
       const issues = error.issues.map((issue) => ({
         path: issue.path.join('.'),
@@ -47,7 +55,8 @@ export function registerErrorHandling(app: FastifyInstance): void {
       });
     }
 
-    request.log.error({ err: error }, 'unhandled error');
+    const databaseError = describeDatabaseError(error);
+    request.log.error(databaseError ? { databaseError } : { err: error }, 'unhandled error');
     return send(reply, 500, {
       error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
     });
