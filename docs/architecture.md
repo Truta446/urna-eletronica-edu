@@ -206,19 +206,23 @@ test/
 
 ## Decisões registradas
 
-| Decisão                                               | Alternativa descartada    | Motivo                                                         |
-| ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------- |
-| Monólito modular                                      | Microsserviços            | Complexidade sem ganho didático                                |
-| `has_voted` na habilitação                            | Na gravação do voto       | Remove o vínculo eleitor ↔ voto no banco                       |
-| `READ COMMITTED` + `UPDATE` condicional               | `SERIALIZABLE` em tudo    | Mesma garantia para este caso, sem retries                     |
-| Merkle root de commitments ordenados                  | Hash chain de ballots     | Uma cadeia registra a ordem de chegada e ajuda a correlacionar |
-| Evento agregado `BALLOT_BOX_SEALED`                   | `VOTE_ACCEPTED` por voto  | Evita correlação por tempo no audit log                        |
-| Testes contra PostgreSQL real                         | Mocks do banco            | Concorrência e constraints não se testam com mock              |
-| Transição de estado por `UPDATE` condicional          | Ler, checar em TS, gravar | Sem janela TOCTOU; o banco serializa chamadas concorrentes     |
-| Regras de estado também em triggers                   | Só no TypeScript          | Valem para qualquer acesso SQL, não só para a API              |
-| Trigger de candidatos com `FOR SHARE`                 | Só checagem na aplicação  | Serializa inserção de candidato com abertura concorrente       |
-| HMAC com chave derivada por eleição                   | Um pepper global          | Impede cruzar a participação de alguém entre eleições          |
-| `has_voted` só `false → true`, só em `OPEN` (trigger) | Só na aplicação           | Prepara a habilitação da Fase 4 com garantia no banco          |
-| `close` só depois de `endsAt`                         | Admin fecha quando quiser | Impede encerrar a votação antes da hora                        |
-| Relógio injetado (`Clock`)                            | `new Date()` espalhado    | Testes de tempo sem `sleep`                                    |
-| Prisma + SQL nas migrations                           | Só Prisma                 | O Prisma não expressa CHECK, triggers nem roles                |
+| Decisão                                               | Alternativa descartada                          | Motivo                                                         |
+| ----------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
+| Monólito modular                                      | Microsserviços                                  | Complexidade sem ganho didático                                |
+| `has_voted` na habilitação                            | Na gravação do voto                             | Remove o vínculo eleitor ↔ voto no banco                       |
+| `READ COMMITTED` + `UPDATE` condicional               | `SERIALIZABLE` em tudo                          | Mesma garantia para este caso, sem retries                     |
+| Merkle root de commitments ordenados                  | Hash chain de ballots                           | Uma cadeia registra a ordem de chegada e ajuda a correlacionar |
+| Evento agregado `BALLOT_BOX_SEALED`                   | `VOTE_ACCEPTED` por voto                        | Evita correlação por tempo no audit log                        |
+| Testes contra PostgreSQL real                         | Mocks do banco                                  | Concorrência e constraints não se testam com mock              |
+| Transição de estado por `UPDATE` condicional          | Ler, checar em TS, gravar                       | Sem janela TOCTOU; o banco serializa chamadas concorrentes     |
+| Regras de estado também em triggers                   | Só no TypeScript                                | Valem para qualquer acesso SQL, não só para a API              |
+| Trigger de candidatos com `FOR SHARE`                 | Só checagem na aplicação                        | Serializa inserção de candidato com abertura concorrente       |
+| HMAC com chave derivada por eleição                   | Um pepper global                                | Impede cruzar a participação de alguém entre eleições          |
+| `has_voted` só `false → true`, só em `OPEN` (trigger) | Só na aplicação                                 | Prepara a habilitação da Fase 4 com garantia no banco          |
+| Habilitação numa única instrução SQL                  | Várias queries numa transação montada no código | Atomicidade e lock no mesmo comando                            |
+| Constraint trigger de balanço (adiada)                | Confiar no código                               | Sessão sem eleitor marcado (ou o inverso) falha no COMMIT      |
+| Relógio da aplicação passado ao SQL                   | `now()` do banco                                | Uma fonte de tempo; testes determinísticos (risco: skew)       |
+| `ADMIN` ≠ `POLL_WORKER`                               | Um papel só                                     | Separação de funções                                           |
+| `close` só depois de `endsAt`                         | Admin fecha quando quiser                       | Impede encerrar a votação antes da hora                        |
+| Relógio injetado (`Clock`)                            | `new Date()` espalhado                          | Testes de tempo sem `sleep`                                    |
+| Prisma + SQL nas migrations                           | Só Prisma                                       | O Prisma não expressa CHECK, triggers nem roles                |

@@ -81,19 +81,24 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 { "voterIdentifier": "123.456.789-09" }
 ```
 
-Em uma única transação:
+Credencial: **mesário** (`POLL_WORKER`). Token de admin recebe `401`.
+
+Em **uma única instrução SQL** (`WITH … UPDATE … INSERT`):
 
 1. confere que a eleição está `OPEN` e dentro de `[startsAt, endsAt)`;
 2. `UPDATE voters SET has_voted = true WHERE … AND NOT has_voted`;
-3. gera `token = randomBytes(32)` (base64url);
-4. grava `voting_sessions(token_hash = SHA-256(token), expires_at)`, **sem `voter_id`**;
-5. registra `VOTER_AUTHORIZED` na auditoria.
+3. só se o passo 2 afetou uma linha: grava `voting_sessions(token_hash = SHA-256(token), expires_at)`, **sem `voter_id`**;
+4. no COMMIT, a constraint trigger confere `sessões == eleitores habilitados`;
+5. registra `VOTER_AUTHORIZED` na auditoria (Fase 6).
+
+`token = randomBytes(32)` em base64url. `expiresAt = min(agora + TTL, endsAt)`.
 
 Respostas:
 
-- `201` → `{ "token": "…", "expiresAt": "…" }`. O token só aparece aqui, uma vez.
-- `404` eleitor não cadastrado nesta eleição
-- `409` eleitor já habilitado/votou; eleição fora de `OPEN` ou da janela
+- `201` → `{ "token": "…", "expiresAt": "…" }`, com `Cache-Control: no-store`. O token só aparece aqui, uma vez.
+- `400` CPF inválido; campos extras (ex.: `expiresAt`)
+- `404` eleição inexistente; eleitor não cadastrado **nesta** eleição
+- `409` eleitor já habilitado; eleição fora de `OPEN`; antes de `startsAt` ou a partir de `endsAt`
 
 ## 4. Voto (eleitor)
 

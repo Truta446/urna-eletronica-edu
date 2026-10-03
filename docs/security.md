@@ -59,13 +59,30 @@ própria, e um pepper novo vale para eleições criadas depois da troca.
 Um hash lento (scrypt/Argon2, ~50 ms) elevaria isso para cerca de 1 CPU-ano, ao custo de ~50 ms por
 habilitação e minutos num cadastro em massa. Fica como endurecimento opcional.
 
-## Tokens de votação (Fase 4)
+## Tokens de votação (Fase 4 — implementado)
 
-- `randomBytes(32)` → 256 bits de entropia, em base64url.
-- No banco: `SHA-256(token)`. Hash lento (bcrypt/argon2) é desnecessário: a entropia já é alta, e o
-  hash rápido permite busca por índice.
-- Expiração curta, uso único, exibido uma vez.
-- Trafega só no header `Authorization`.
+- `randomBytes(32)` → 256 bits de entropia, em base64url (43 caracteres).
+- No banco: `SHA-256(token)`, com `CHECK` de 32 bytes e `UNIQUE`. Hash lento (bcrypt/argon2) é
+  desnecessário: a entropia já é alta, e o hash rápido permite busca por índice.
+- Expira em `VOTING_SESSION_TTL_SECONDS` (30–3600, padrão 300), **limitado ao fim da janela** da eleição.
+- Uso único (consumo na Fase 5); triggers impedem alterar `token_hash`/`expires_at`, "desconsumir" ou apagar sessões.
+- Exibido uma única vez, com `Cache-Control: no-store`; trafega só no header `Authorization`.
+- Testes procuram o token em claro em **todas** as tabelas e nos logs.
+
+### Relógio
+
+Janela de votação e expiração usam o **relógio da aplicação** (`Clock`), passado como parâmetro ao
+SQL, em vez de `now()` do banco: uma única fonte de tempo, controlável nos testes.
+**Risco conhecido:** com várias instâncias da aplicação, relógios divergentes mudariam a expiração
+na mesma medida (exige NTP).
+
+### Balanço de habilitações
+
+Uma _constraint trigger_ `DEFERRABLE INITIALLY DEFERRED` confere no COMMIT, por eleição, que
+`nº de sessões == nº de eleitores com has_voted`. As duas contagens ficam em **um único comando
+SQL**. A primeira versão usava dois comandos, e em `READ COMMITTED` cada um via um snapshot
+diferente, o que gerava falso desbalanço sob concorrência. O teste de habilitações concorrentes
+pegou esse bug, corrigido numa migration nova (a original não foi editada).
 
 ## Nullifier e commitment (Fase 5)
 
@@ -128,10 +145,13 @@ Também implementado:
 
 Nunca logar: voto, conteúdo decifrado, token completo, segredos, chaves privadas, identificador do eleitor.
 
-## Credenciais de administrador (Fase 2 — implementado)
+## Credenciais de operadores (Fases 2 e 4 — implementado)
 
-- `ADMIN_CREDENTIALS=label:sha256hex,…`. A configuração **nunca** contém o token em si; um vazamento do `.env` não dá acesso.
-- `npm run admin:token -- <label>` gera token (256 bits) e a linha de configuração.
+- `ADMIN_CREDENTIALS` e `POLL_WORKER_CREDENTIALS`, ambos `label:sha256hex,…`. A configuração **nunca**
+  contém o token em si; um vazamento do `.env` não dá acesso.
+- **Separação de funções:** admin configura eleições mas não habilita eleitores; mesário habilita mas
+  não acessa `/admin`. A env rejeita um mesmo token nos dois papéis.
+- `npm run operator:token -- <label>` gera token (256 bits) e a linha de configuração.
 - Comparação com `timingSafeEqual` contra **todas** as credenciais, sem sair no primeiro acerto.
 - Formato estrito `Authorization: Bearer <43 caracteres base64url>`; qualquer variação dá `401` idêntico.
 - A autenticação roda antes da validação do body, para não revelar o formato da API a quem não está autenticado.
