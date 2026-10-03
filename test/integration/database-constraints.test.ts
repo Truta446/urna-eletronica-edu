@@ -540,3 +540,79 @@ describe('ballots table', () => {
     expect(state).toBe(SqlState.CHECK_VIOLATION);
   });
 });
+
+describe('audit_events table', () => {
+  const zero = Buffer.alloc(32);
+
+  function insertEvent(seq: number, previousHash: Uint8Array<ArrayBuffer>) {
+    return t.prisma.auditEvent.create({
+      data: {
+        seq,
+        eventType: 'ELECTION_CREATED',
+        actorType: 'ADMIN',
+        actorIdentifier: 'direct-sql',
+        payload: {},
+        previousHash,
+        eventHash: randomBytes(32),
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  it('accepts the genesis event pointing to 32 zero bytes', async () => {
+    expect(await sqlStateOf(insertEvent(1, zero))).toBeUndefined();
+  });
+
+  it('rejects a first event that does not point to genesis', async () => {
+    expect(await sqlStateOf(insertEvent(1, randomBytes(32)))).toBe(SqlState.AUDIT_CHAIN_BROKEN);
+  });
+
+  it('rejects an event whose previous_hash does not match its predecessor (fork)', async () => {
+    await insertEvent(1, zero);
+    expect(await sqlStateOf(insertEvent(2, randomBytes(32)))).toBe(SqlState.AUDIT_CHAIN_BROKEN);
+  });
+
+  it('rejects a gap in seq', async () => {
+    const first = await insertEvent(1, zero);
+    expect(await sqlStateOf(insertEvent(3, Buffer.from(first.eventHash)))).toBe(
+      SqlState.AUDIT_CHAIN_BROKEN,
+    );
+  });
+
+  it('rejects two events with the same seq (no forks)', async () => {
+    const first = await insertEvent(1, zero);
+    await insertEvent(2, Buffer.from(first.eventHash));
+    expect(await sqlStateOf(insertEvent(2, Buffer.from(first.eventHash)))).toBe(
+      SqlState.UNIQUE_VIOLATION,
+    );
+  });
+
+  it('rejects UPDATE', async () => {
+    await insertEvent(1, zero);
+    expect(
+      await sqlStateOf(t.prisma.auditEvent.updateMany({ data: { actorIdentifier: 'x' } })),
+    ).toBe(SqlState.AUDIT_IMMUTABLE);
+  });
+
+  it('rejects DELETE', async () => {
+    await insertEvent(1, zero);
+    expect(await sqlStateOf(t.prisma.auditEvent.deleteMany({}))).toBe(SqlState.AUDIT_IMMUTABLE);
+  });
+
+  it('rejects TRUNCATE', async () => {
+    await insertEvent(1, zero);
+    expect(await sqlStateOf(t.prisma.$executeRawUnsafe('TRUNCATE audit_events'))).toBe(
+      SqlState.AUDIT_IMMUTABLE,
+    );
+  });
+
+  it('rejects a payload that is not a JSON object', async () => {
+    const state = await sqlStateOf(
+      t.prisma.$executeRaw`
+        INSERT INTO audit_events (seq, event_type, actor_type, actor_identifier, payload,
+                                  previous_hash, event_hash, created_at)
+        VALUES (1, 'ELECTION_CREATED', 'ADMIN', 'x', '[1,2]'::jsonb, ${zero}, ${randomBytes(32)}, now())`,
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+});

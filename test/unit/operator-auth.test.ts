@@ -63,7 +63,7 @@ describe('findOperator', () => {
 
   it('identifies the matching operator', () => {
     expect(findOperator(credentials, 'POLL_WORKER', bob)).toEqual({
-      role: 'POLL_WORKER',
+      type: 'POLL_WORKER',
       id: 'bob',
     });
   });
