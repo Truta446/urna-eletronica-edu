@@ -22,19 +22,21 @@ enum ElectionStatus {
 
 /// Transições e congelamento de campos são garantidos por trigger (ver migration).
 model Election {
-  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String
-  status         ElectionStatus      @default(DRAFT)
-  startsAt       DateTime            @map("starts_at") @db.Timestamptz(3)
-  endsAt         DateTime            @map("ends_at") @db.Timestamptz(3)
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  candidates     Candidate[]
-  voters         Voter[]
-  votingSessions VotingSession[]
-  ballots        Ballot[]
-  idempotency    IdempotencyRecord[]
-  auditEvents    AuditEvent[]
-  tallyResult    TallyResult?
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  status              ElectionStatus      @default(DRAFT)
+  startsAt            DateTime            @map("starts_at") @db.Timestamptz(3)
+  endsAt              DateTime            @map("ends_at") @db.Timestamptz(3)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// v2: chave pública X25519 (HPKE) da eleição. Nula = votos em claro (v1). Congelada após DRAFT.
+  encryptionPublicKey Bytes?              @map("encryption_public_key")
+  candidates          Candidate[]
+  voters              Voter[]
+  votingSessions      VotingSession[]
+  ballots             Ballot[]
+  idempotency         IdempotencyRecord[]
+  auditEvents         AuditEvent[]
+  tallyResult         TallyResult?
 
   @@map("elections")
 }
@@ -94,17 +96,21 @@ enum BallotKind {
 /// A urna. Append-only (trigger). Deliberadamente SEM voter_id, SEM session_id e SEM created_at.
 /// O id é UUID v4 gerado na aplicação (entra no commitment); nunca v7, que embute horário.
 model Ballot {
-  id          String     @id @db.Uuid
-  electionId  String     @map("election_id") @db.Uuid
-  kind        BallotKind
-  candidateId String?    @map("candidate_id") @db.Uuid
+  id              String      @id @db.Uuid
+  electionId      String      @map("election_id") @db.Uuid
+  /// v1: escolha em claro. v2: nulo (a escolha está em `ciphertext`).
+  kind            BallotKind?
+  candidateId     String?     @map("candidate_id") @db.Uuid
   /// SHA-256 do token com separação de domínio: um token, no máximo um voto.
-  nullifier   Bytes      @unique
+  nullifier       Bytes       @unique
   /// SHA-256 do conteúdo canônico do voto; folha da Merkle root na apuração.
-  commitment  Bytes      @unique
-  election    Election   @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  commitment      Bytes       @unique
+  /// v2 (HPKE): chave encapsulada (32 bytes) e texto cifrado (33 bytes, tamanho fixo).
+  encapsulatedKey Bytes?      @map("encapsulated_key")
+  ciphertext      Bytes?
+  election        Election    @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   /// FK composta: o candidato votado pertence à MESMA eleição do voto.
-  candidate   Candidate? @relation(fields: [electionId, candidateId], references: [electionId, id], onDelete: Restrict, onUpdate: Restrict)
+  candidate       Candidate?  @relation(fields: [electionId, candidateId], references: [electionId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([electionId])
   @@map("ballots")
@@ -169,14 +175,17 @@ model AuditEvent {
 /// Resultado oficial, gravado uma única vez (trigger) na transição CLOSED -> TALLIED.
 /// `signature` é Ed25519 sobre a declaração canônica do resultado (ver tally/domain/statements.ts).
 model TallyResult {
-  electionId String   @id @map("election_id") @db.Uuid
-  result     Json
-  merkleRoot Bytes    @map("merkle_root")
-  resultHash Bytes    @map("result_hash")
-  signature  String
-  keyId      String   @map("key_id")
-  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
-  election   Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  electionId    String   @id @map("election_id") @db.Uuid
+  result        Json
+  merkleRoot    Bytes    @map("merkle_root")
+  resultHash    Bytes    @map("result_hash")
+  signature     String
+  keyId         String   @map("key_id")
+  /// v2: chave privada da eleição, reconstruída pelos trustees e PUBLICADA após a apuração
+  /// para que qualquer um refaça a decifragem. Os votos continuam sem vínculo com eleitores.
+  decryptionKey Bytes?   @map("decryption_key")
+  createdAt     DateTime @map("created_at") @db.Timestamptz(3)
+  election      Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("tally_results")
 }

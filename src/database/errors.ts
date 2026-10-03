@@ -18,6 +18,7 @@ export const SqlState = {
   AUDIT_IMMUTABLE: 'UE010',
   AUDIT_CHAIN_BROKEN: 'UE011',
   TALLY_IMMUTABLE: 'UE012',
+  BALLOT_FORMAT_MISMATCH: 'UE013',
 } as const;
 
 const driverCauseSchema = z.object({
