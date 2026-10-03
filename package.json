@@ -31,7 +31,8 @@
     "web": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "web:lint": "npm --prefix web run lint",
-    "web:e2e": "npm --prefix web run e2e"
+    "web:e2e": "npm --prefix web run e2e",
+    "bench:national": "tsx --env-file-if-exists=.env scripts/bench-national.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
