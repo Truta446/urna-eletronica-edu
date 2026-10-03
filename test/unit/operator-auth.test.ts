@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { adminCredentialsSchema } from '../../src/security/admin-credentials.js';
+import { operatorCredentialsSchema } from '../../src/security/operator-credentials.js';
 import { generateToken, hashToken } from '../../src/security/tokens.js';
-import { extractBearerToken, findAdmin } from '../../src/shared/http/admin-auth.js';
+import { extractBearerToken, findOperator } from '../../src/shared/http/operator-auth.js';
 
 const hex = (token: string) => hashToken(token).toString('hex');
 
-describe('adminCredentialsSchema', () => {
+describe('operatorCredentialsSchema', () => {
   it('parses label:sha256hex pairs', () => {
     const a = generateToken();
     const b = generateToken();
-    const parsed = adminCredentialsSchema.parse(`alice:${hex(a)}, bob.ops:${hex(b)}`);
+    const parsed = operatorCredentialsSchema.parse(`alice:${hex(a)}, bob.ops:${hex(b)}`);
     expect(parsed.map((c) => c.label)).toEqual(['alice', 'bob.ops']);
     expect(parsed[0]?.tokenHash).toEqual(hashToken(a));
   });
@@ -23,12 +23,12 @@ describe('adminCredentialsSchema', () => {
     ['duplicate label', `alice:${'a'.repeat(64)},alice:${'b'.repeat(64)}`],
     ['duplicate hash', `alice:${'a'.repeat(64)},bob:${'a'.repeat(64)}`],
   ])('rejects %s', (_label, raw) => {
-    expect(adminCredentialsSchema.safeParse(raw).success).toBe(false);
+    expect(operatorCredentialsSchema.safeParse(raw).success).toBe(false);
   });
 
   it('does not echo the offending entry in the error', () => {
     const secret = generateToken();
-    const result = adminCredentialsSchema.safeParse(`alice:${secret}`);
+    const result = operatorCredentialsSchema.safeParse(`alice:${secret}`);
     expect(JSON.stringify(result.error)).not.toContain(secret);
   });
 });
@@ -53,7 +53,7 @@ describe('extractBearerToken', () => {
   });
 });
 
-describe('findAdmin', () => {
+describe('findOperator', () => {
   const alice = generateToken();
   const bob = generateToken();
   const credentials = [
@@ -62,10 +62,13 @@ describe('findAdmin', () => {
   ];
 
   it('identifies the matching operator', () => {
-    expect(findAdmin(credentials, bob)).toEqual({ type: 'ADMIN', id: 'bob' });
+    expect(findOperator(credentials, 'POLL_WORKER', bob)).toEqual({
+      role: 'POLL_WORKER',
+      id: 'bob',
+    });
   });
 
   it('rejects unknown tokens', () => {
-    expect(findAdmin(credentials, generateToken())).toBeUndefined();
+    expect(findOperator(credentials, 'ADMIN', generateToken())).toBeUndefined();
   });
 });

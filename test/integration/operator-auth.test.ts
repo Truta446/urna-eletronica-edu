@@ -3,7 +3,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateToken } from '../../src/security/tokens.js';
 import { resetDatabase } from '../helpers/database.js';
 import { electionPayload } from '../helpers/factories.js';
-import { ADMIN_TOKEN, createTestApp, type TestApp } from '../helpers/test-app.js';
+import {
+  ADMIN_TOKEN,
+  adminHeaders,
+  createTestApp,
+  pollWorkerHeaders,
+  type TestApp,
+} from '../helpers/test-app.js';
 
 let t: TestApp;
 
@@ -19,6 +25,7 @@ const adminRoutes = [
   ['POST', `/admin/elections/${randomUUID()}/close`],
   ['POST', `/admin/elections/${randomUUID()}/candidates`],
   ['POST', `/admin/elections/${randomUUID()}/voters`],
+  ['POST', `/elections/${randomUUID()}/voting-sessions`],
 ] as const;
 
 const badHeaders: [string, Record<string, string>][] = [
@@ -64,6 +71,31 @@ describe('admin authentication', () => {
       payload: '{"name":',
     });
     expect(response.statusCode).toBe(401);
+  });
+
+  describe('separation of duties', () => {
+    it('an ADMIN token cannot authorize voters', async () => {
+      const response = await t.app.inject({
+        method: 'POST',
+        url: `/elections/${randomUUID()}/voting-sessions`,
+        headers: adminHeaders,
+        payload: { voterIdentifier: '529.982.247-25' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it.each(adminRoutes.filter(([, url]) => url.startsWith('/admin')))(
+      'a POLL_WORKER token cannot call %s %s',
+      async (method, url) => {
+        const response = await t.app.inject({
+          method,
+          url,
+          headers: pollWorkerHeaders,
+          payload: electionPayload(new Date(Date.now() + 60_000)),
+        });
+        expect(response.statusCode).toBe(401);
+      },
+    );
   });
 
   it('does not create anything on a rejected request', async () => {

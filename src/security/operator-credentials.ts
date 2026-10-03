@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export interface AdminCredential {
-  /** Nome legível do operador; vira o `actorIdentifier` na auditoria. */
+export interface OperatorCredential {
+  /** Nome legível do operador (admin ou mesário); vira o `actorIdentifier` na auditoria. */
   label: string;
   /** SHA-256 do token. O token em si nunca fica em configuração. */
   tokenHash: Buffer;
@@ -10,14 +10,14 @@ export interface AdminCredential {
 const ENTRY_PATTERN = /^([a-z0-9][a-z0-9._-]{0,31}):([0-9a-f]{64})$/;
 
 /**
- * Formato: `label:sha256hex,label2:sha256hex`. Gere com `npm run admin:token -- <label>`.
+ * Formato: `label:sha256hex,label2:sha256hex`. Gere com `npm run operator:token -- <label>`.
  */
-export const adminCredentialsSchema = z
+export const operatorCredentialsSchema = z
   .string()
   .trim()
   .min(1)
-  .transform((raw, ctx): AdminCredential[] => {
-    const credentials: AdminCredential[] = [];
+  .transform((raw, ctx): OperatorCredential[] => {
+    const credentials: OperatorCredential[] = [];
     for (const entry of raw.split(',').map((part) => part.trim())) {
       const match = ENTRY_PATTERN.exec(entry);
       if (!match?.[1] || !match[2]) {

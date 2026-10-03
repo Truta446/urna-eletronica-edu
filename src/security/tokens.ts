@@ -12,7 +12,7 @@ export function generateToken(): string {
  * SHA-256 é suficiente para tokens de alta entropia: não há o que forçar por dicionário,
  * e um hash rápido permite busca por índice. (Para segredos de baixa entropia, ver HMAC + pepper.)
  */
-export function hashToken(token: string): Buffer {
+export function hashToken(token: string): Buffer<ArrayBuffer> {
   return createHash('sha256').update(token, 'utf8').digest();
 }
 

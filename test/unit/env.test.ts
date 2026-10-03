@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { InvalidEnvironmentError, loadEnv } from '../../src/config/env.js';
 
 const HASH = 'a'.repeat(64);
+const POLL_HASH = 'b'.repeat(64);
 const PEPPER = Buffer.alloc(32, 7);
 const validEnv = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
   ADMIN_CREDENTIALS: `alice:${HASH}`,
+  POLL_WORKER_CREDENTIALS: `mesario:${POLL_HASH}`,
   VOTER_ID_PEPPER: PEPPER.toString('base64url'),
 };
 
@@ -18,7 +20,9 @@ describe('loadEnv', () => {
       LOG_LEVEL: 'info',
       DATABASE_URL: validEnv.DATABASE_URL,
       ADMIN_CREDENTIALS: [{ label: 'alice', tokenHash: Buffer.from(HASH, 'hex') }],
+      POLL_WORKER_CREDENTIALS: [{ label: 'mesario', tokenHash: Buffer.from(POLL_HASH, 'hex') }],
       VOTER_ID_PEPPER: PEPPER,
+      VOTING_SESSION_TTL_SECONDS: 300,
     });
   });
 
@@ -27,6 +31,26 @@ describe('loadEnv', () => {
   });
 
   it.each([
+    [
+      'missing POLL_WORKER_CREDENTIALS',
+      { ...validEnv, POLL_WORKER_CREDENTIALS: undefined },
+      'POLL_WORKER_CREDENTIALS',
+    ],
+    [
+      'the same token as ADMIN and POLL_WORKER (separation of duties)',
+      { ...validEnv, POLL_WORKER_CREDENTIALS: `mesario:${HASH}` },
+      'POLL_WORKER_CREDENTIALS',
+    ],
+    [
+      'TTL below 30s',
+      { ...validEnv, VOTING_SESSION_TTL_SECONDS: '29' },
+      'VOTING_SESSION_TTL_SECONDS',
+    ],
+    [
+      'TTL above 1h',
+      { ...validEnv, VOTING_SESSION_TTL_SECONDS: '3601' },
+      'VOTING_SESSION_TTL_SECONDS',
+    ],
     ['missing VOTER_ID_PEPPER', { ...validEnv, VOTER_ID_PEPPER: undefined }, 'VOTER_ID_PEPPER'],
     [
       'short VOTER_ID_PEPPER',

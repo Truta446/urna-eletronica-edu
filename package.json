@@ -21,8 +21,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
-    "admin:token": "tsx scripts/admin-token.ts",
-    "secret:generate": "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url') + '\\n')\""
+    "secret:generate": "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url') + '\\n')\"",
+    "operator:token": "tsx scripts/operator-token.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
