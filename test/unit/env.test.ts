@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidEnvironmentError, loadEnv } from '../../src/config/env.js';
 
-const validEnv = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db' };
+const HASH = 'a'.repeat(64);
+const validEnv = {
+  DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
+  ADMIN_CREDENTIALS: `alice:${HASH}`,
+};
 
 describe('loadEnv', () => {
   it('applies safe defaults', () => {
@@ -11,6 +15,7 @@ describe('loadEnv', () => {
       PORT: 3000,
       LOG_LEVEL: 'info',
       DATABASE_URL: validEnv.DATABASE_URL,
+      ADMIN_CREDENTIALS: [{ label: 'alice', tokenHash: Buffer.from(HASH, 'hex') }],
     });
   });
 
@@ -19,8 +24,17 @@ describe('loadEnv', () => {
   });
 
   it.each([
-    ['missing DATABASE_URL', {}, 'DATABASE_URL'],
-    ['non-postgres DATABASE_URL', { DATABASE_URL: 'mysql://u:p@h/db' }, 'DATABASE_URL'],
+    ['missing DATABASE_URL', { ...validEnv, DATABASE_URL: undefined }, 'DATABASE_URL'],
+    [
+      'non-postgres DATABASE_URL',
+      { ...validEnv, DATABASE_URL: 'mysql://u:p@h/db' },
+      'DATABASE_URL',
+    ],
+    [
+      'missing ADMIN_CREDENTIALS',
+      { ...validEnv, ADMIN_CREDENTIALS: undefined },
+      'ADMIN_CREDENTIALS',
+    ],
     ['PORT out of range', { ...validEnv, PORT: '70000' }, 'PORT'],
     ['PORT not a number', { ...validEnv, PORT: 'abc' }, 'PORT'],
     ['unknown NODE_ENV', { ...validEnv, NODE_ENV: 'staging' }, 'NODE_ENV'],
@@ -33,7 +47,7 @@ describe('loadEnv', () => {
   it('never echoes the invalid value, which may be a secret', () => {
     const secret = 'super-secret-password';
     try {
-      loadEnv({ DATABASE_URL: `mysql://admin:${secret}@db.internal/app` });
+      loadEnv({ ...validEnv, DATABASE_URL: `mysql://admin:${secret}@db.internal/app` });
       expect.unreachable();
     } catch (error) {
       expect(String(error)).toContain('DATABASE_URL');
