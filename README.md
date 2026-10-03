@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-0%20%C2%B7%20an%C3%A1lise-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-1%20%C2%B7%20bootstrap-f2c94c?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -39,11 +39,11 @@ integridade, voto secreto, auditabilidade, criptografia e concorrência.
 
 ## 🗳️ Por que este projeto
 
-Votar parece simples: *uma pessoa, um voto, contar no final.* Mas basta tentar implementar para que as
+Votar parece simples: _uma pessoa, um voto, contar no final._ Mas basta tentar implementar para que as
 propriedades comecem a brigar entre si:
 
-- **Voto secreto × "um eleitor, um voto".** Para impedir voto duplo, o sistema precisa saber *quem* votou.
-  Para manter o sigilo, ele **não pode** saber *em quem*.
+- **Voto secreto × "um eleitor, um voto".** Para impedir voto duplo, o sistema precisa saber _quem_ votou.
+  Para manter o sigilo, ele **não pode** saber _em quem_.
 - **Auditabilidade × anonimato.** Logs detalhados ajudam a investigar fraudes — e também ajudam a
   reidentificar eleitores por horário.
 - **Retries × unicidade.** Clientes repetem requisições por timeout; o servidor precisa ser idempotente
@@ -54,23 +54,23 @@ Este repositório explora essas tensões em pequenas fases, com testes que **pro
 
 ## 📐 Princípios
 
-| # | Propriedade | Onde é garantida |
-|---|-------------|------------------|
-| 1 | Um eleitor vota uma única vez | `UPDATE` condicional + `UNIQUE` no banco |
-| 2 | O voto é secreto | Separação de contextos, sem `voter_id` no voto |
-| 3 | Não existe relação persistente eleitor → voto | Modelo de dados + ausência de timestamps correlacionáveis |
-| 4 | Voto registrado não muda silenciosamente | Triggers append-only + commitment + Merkle root na apuração |
-| 5 | Operações administrativas são auditadas | Audit log em hash chain |
-| 6 | Autenticação separada do armazenamento do voto | Token descartável atravessa a fronteira, nada mais |
-| 7 | Apuração reproduzível | Tally determinístico a partir dos votos armazenados |
-| 8 | Operações críticas são transacionais | Uma transação por voto, consumo atômico do token |
-| 9 | Resistente a retries e concorrência | `Idempotency-Key` + constraints do PostgreSQL |
-| 10 | Invariantes cobertas por testes | Vitest contra PostgreSQL real, sem mocks de banco |
+| #   | Propriedade                                    | Onde é garantida                                            |
+| --- | ---------------------------------------------- | ----------------------------------------------------------- |
+| 1   | Um eleitor vota uma única vez                  | `UPDATE` condicional + `UNIQUE` no banco                    |
+| 2   | O voto é secreto                               | Separação de contextos, sem `voter_id` no voto              |
+| 3   | Não existe relação persistente eleitor → voto  | Modelo de dados + ausência de timestamps correlacionáveis   |
+| 4   | Voto registrado não muda silenciosamente       | Triggers append-only + commitment + Merkle root na apuração |
+| 5   | Operações administrativas são auditadas        | Audit log em hash chain                                     |
+| 6   | Autenticação separada do armazenamento do voto | Token descartável atravessa a fronteira, nada mais          |
+| 7   | Apuração reproduzível                          | Tally determinístico a partir dos votos armazenados         |
+| 8   | Operações críticas são transacionais           | Uma transação por voto, consumo atômico do token            |
+| 9   | Resistente a retries e concorrência            | `Idempotency-Key` + constraints do PostgreSQL               |
+| 10  | Invariantes cobertas por testes                | Vitest contra PostgreSQL real, sem mocks de banco           |
 
 > [!NOTE]
 > Nada aqui é rotulado como "seguro". Cada propriedade é classificada como **garantida**,
 > **parcialmente mitigada**, **não garantida** ou **risco conhecido** — sempre diferenciando
-> *segurança da aplicação* de *segurança de um sistema eleitoral real*.
+> _segurança da aplicação_ de _segurança de um sistema eleitoral real_.
 
 ## 🧱 Arquitetura
 
@@ -188,38 +188,38 @@ erDiagram
 
 ## 🛡️ Modelo de ameaças (resumo)
 
-| Ameaça | Mitigação principal | Classificação |
-|--------|--------------------|---------------|
-| Eleitor tenta votar duas vezes | `UPDATE … WHERE NOT has_voted` + `UNIQUE` | ✅ garantida (na aplicação) |
-| Duas requisições simultâneas com o mesmo token | Consumo atômico via row lock + `nullifier UNIQUE` | ✅ garantida |
-| Retry por timeout | `Idempotency-Key` gravada na mesma transação do voto | ✅ garantida |
-| Admin altera voto via API | Não existe endpoint; triggers bloqueiam `UPDATE/DELETE` | ✅ garantida (na aplicação) |
-| Alteração direta no banco por superusuário | Commitments + Merkle root assinada no fechamento | 🟡 parcialmente mitigada |
-| Correlação eleitor ↔ voto pelo banco | Sem FK, sem timestamps, UUID v4 | 🟡 parcialmente mitigada (`xmin`/WAL vazam ordem) |
-| Backend malicioso correlaciona em memória | Blind signatures (RFC 9474) — fase futura | 🔴 não garantida |
-| Vazamento do banco | Identificadores com HMAC + pepper fora do banco | 🟡 parcialmente mitigada |
-| Edição/remoção de eventos de auditoria | Hash chain + `verifyAuditChain()` | 🟡 detecta edição no meio; truncamento exige âncora externa |
-| Coerção / venda de voto | Recibo não revela a escolha | ⚠️ risco conhecido |
+| Ameaça                                         | Mitigação principal                                     | Classificação                                               |
+| ---------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| Eleitor tenta votar duas vezes                 | `UPDATE … WHERE NOT has_voted` + `UNIQUE`               | ✅ garantida (na aplicação)                                 |
+| Duas requisições simultâneas com o mesmo token | Consumo atômico via row lock + `nullifier UNIQUE`       | ✅ garantida                                                |
+| Retry por timeout                              | `Idempotency-Key` gravada na mesma transação do voto    | ✅ garantida                                                |
+| Admin altera voto via API                      | Não existe endpoint; triggers bloqueiam `UPDATE/DELETE` | ✅ garantida (na aplicação)                                 |
+| Alteração direta no banco por superusuário     | Commitments + Merkle root assinada no fechamento        | 🟡 parcialmente mitigada                                    |
+| Correlação eleitor ↔ voto pelo banco           | Sem FK, sem timestamps, UUID v4                         | 🟡 parcialmente mitigada (`xmin`/WAL vazam ordem)           |
+| Backend malicioso correlaciona em memória      | Blind signatures (RFC 9474) — fase futura               | 🔴 não garantida                                            |
+| Vazamento do banco                             | Identificadores com HMAC + pepper fora do banco         | 🟡 parcialmente mitigada                                    |
+| Edição/remoção de eventos de auditoria         | Hash chain + `verifyAuditChain()`                       | 🟡 detecta edição no meio; truncamento exige âncora externa |
+| Coerção / venda de voto                        | Recibo não revela a escolha                             | ⚠️ risco conhecido                                          |
 
 O modelo completo, com ativo, atacante, vetor, impacto, mitigação e risco residual de cada ameaça,
-ficará em [`docs/threat-model.md`](docs/threat-model.md).
+está em [`docs/threat-model.md`](docs/threat-model.md).
 
 ## 🧰 Stack
 
-| Camada | Escolha | Por quê |
-|--------|---------|---------|
-| Runtime | Node.js LTS + TypeScript `strict` | Tipos como documentação viva do domínio |
-| HTTP | Fastify | Rápido, schema-first, ótimo `inject()` para testes |
-| Banco | PostgreSQL | Transações, row locking, constraints, triggers |
-| ORM | Prisma (+ SQL nas migrations) | Produtividade; o que o Prisma não expressa vai em SQL puro |
-| Validação | Zod | Body, params, headers **e** variáveis de ambiente |
-| Testes | Vitest contra PostgreSQL real | Concorrência não se testa com mock |
-| Cripto | `node:crypto`, libs auditadas | Nada de criptografia caseira |
+| Camada    | Escolha                           | Por quê                                                    |
+| --------- | --------------------------------- | ---------------------------------------------------------- |
+| Runtime   | Node.js LTS + TypeScript `strict` | Tipos como documentação viva do domínio                    |
+| HTTP      | Fastify                           | Rápido, schema-first, ótimo `inject()` para testes         |
+| Banco     | PostgreSQL                        | Transações, row locking, constraints, triggers             |
+| ORM       | Prisma (+ SQL nas migrations)     | Produtividade; o que o Prisma não expressa vai em SQL puro |
+| Validação | Zod                               | Body, params, headers **e** variáveis de ambiente          |
+| Testes    | Vitest contra PostgreSQL real     | Concorrência não se testa com mock                         |
+| Cripto    | `node:crypto`, libs auditadas     | Nada de criptografia caseira                               |
 
 ## 🗺️ Roadmap
 
 - [x] **Fase 0** — Análise: arquitetura, threat model, modelo de dados, fluxo
-- [ ] **Fase 1** — Bootstrap: TypeScript, Fastify, healthcheck, Docker Compose, Prisma, Vitest, lint
+- [x] **Fase 1** — Bootstrap: TypeScript, Fastify, healthcheck, Docker Compose, Prisma, Vitest, lint
 - [ ] **Fase 2** — Eleições e candidatos
 - [ ] **Fase 3** — Eleitores (HMAC + pepper, sem identificação em claro)
 - [ ] **Fase 4** — Autorização de votação (token aleatório, expirável, single-use, hash no banco)
@@ -244,29 +244,41 @@ INV-7  N requisições concorrentes com o mesmo token produzem exatamente 1 voto
 
 ## 🚀 Como rodar
 
-> Disponível a partir da Fase 1.
+**Pré-requisitos:** Node.js 24+ e Docker.
 
 ```bash
-docker compose up -d
-npm install
+cp .env.example .env      # valores de desenvolvimento
+docker compose up -d      # PostgreSQL 18 em 127.0.0.1:5440 (+ banco urna_test)
+npm install               # também gera o Prisma Client
 npm run db:migrate
-npm run dev
-
-npm test
-npm run lint
-npm run typecheck
+npm run dev               # http://127.0.0.1:3000
 ```
+
+```bash
+curl localhost:3000/health          # {"status":"ok"}
+curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
+```
+
+| Comando                       | O que faz                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `npm test`                    | Vitest contra PostgreSQL real (`urna_test`; recusa qualquer banco que não termine em `_test`) |
+| `npm run lint`                | ESLint (`strictTypeChecked`) + Prettier                                                       |
+| `npm run typecheck`           | `tsc --noEmit` com `strict` e checagens extras                                                |
+| `npm run build` / `npm start` | Compila para `dist/` e executa                                                                |
+| `npm run db:migrate:dev`      | Cria uma nova migration a partir do `schema.prisma`                                           |
+
+> A porta 5440 evita conflito com um PostgreSQL local. Para mudar, defina `POSTGRES_PORT` e ajuste as URLs no `.env`.
 
 ## 📚 Documentação
 
-> Os documentos abaixo são criados ao longo das fases.
+> Os documentos evoluem a cada fase.
 
-| Documento | Conteúdo |
-|-----------|----------|
-| [`docs/architecture.md`](docs/architecture.md) | Componentes, fluxos e diagramas Mermaid |
+| Documento                                      | Conteúdo                                          |
+| ---------------------------------------------- | ------------------------------------------------- |
+| [`docs/architecture.md`](docs/architecture.md) | Componentes, fluxos e diagramas Mermaid           |
 | [`docs/threat-model.md`](docs/threat-model.md) | Ameaças, atacantes, mitigações e riscos residuais |
-| [`docs/voting-flow.md`](docs/voting-flow.md) | Passo a passo do voto, da habilitação à apuração |
-| [`docs/security.md`](docs/security.md) | Criptografia, chaves, logs e redaction |
+| [`docs/voting-flow.md`](docs/voting-flow.md)   | Passo a passo do voto, da habilitação à apuração  |
+| [`docs/security.md`](docs/security.md)         | Criptografia, chaves, logs e redaction            |
 
 ## 🔗 Referências
 
