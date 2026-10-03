@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { resetDatabase } from '../helpers/database.js';
-import { addCandidate, createElection, openElection } from '../helpers/factories.js';
+import { addCandidate, createElection, openElection, registerVoter } from '../helpers/factories.js';
 import { createFakeClock } from '../helpers/fake-clock.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
@@ -48,7 +48,8 @@ describe('POST /admin/elections/:id/candidates', () => {
   it('refuses new candidates once the election is OPEN (409)', async () => {
     const election = await createElection(t, clock.now());
     await addCandidate(t, election.id, { number: 1, name: 'A' });
-    await openElection(t, election.id);
+    await registerVoter(t, election.id);
+    expect((await openElection(t, election.id)).statusCode).toBe(200);
     const response = await addCandidate(t, election.id, { number: 2, name: 'B' });
     expect(response.statusCode).toBe(409);
   });
@@ -90,6 +91,7 @@ describe('POST /admin/elections/:id/candidates', () => {
   it('never leaves a candidate added after opening, even when racing the open', async () => {
     const election = await createElection(t, clock.now());
     await addCandidate(t, election.id, { number: 1, name: 'Seed' });
+    await registerVoter(t, election.id);
 
     const inserts = Array.from({ length: 30 }, (_, i) =>
       addCandidate(t, election.id, { number: 100 + i, name: `Late ${i}` }),

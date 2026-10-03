@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { inspectDatabaseError, SqlState } from '../../src/database/errors.js';
 import { canTransition, type ElectionStatus } from '../../src/modules/election/domain/election.js';
@@ -161,5 +162,103 @@ describe('candidates table', () => {
       t.prisma.candidate.update({ where: { id: candidate.id }, data: { electionId: b.id } }),
     );
     expect(state).toBe(SqlState.ELECTION_NOT_DRAFT);
+  });
+});
+
+describe('voters table', () => {
+  const hmac = () => randomBytes(32);
+
+  async function voterIn(status: ElectionStatus) {
+    const election = await insertElection('DRAFT');
+    const voter = await t.prisma.voter.create({
+      data: { electionId: election.id, identifierHmac: hmac() },
+    });
+    if (status !== 'DRAFT') {
+      await t.prisma.election.update({ where: { id: election.id }, data: { status: 'OPEN' } });
+    }
+    return { election, voter };
+  }
+
+  it('CHECK rejects identifiers that are not 32 bytes (e.g. a plaintext CPF)', async () => {
+    const election = await insertElection();
+    const state = await sqlStateOf(
+      t.prisma.voter.create({
+        data: { electionId: election.id, identifierHmac: Buffer.from('52998224725') },
+      }),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+
+  it('UNIQUE rejects the same identifier twice in an election', async () => {
+    const election = await insertElection();
+    const identifierHmac = hmac();
+    await t.prisma.voter.create({ data: { electionId: election.id, identifierHmac } });
+    const state = await sqlStateOf(
+      t.prisma.voter.create({ data: { electionId: election.id, identifierHmac } }),
+    );
+    expect(state).toBe(SqlState.UNIQUE_VIOLATION);
+  });
+
+  it('trigger rejects registering into an OPEN election', async () => {
+    const election = await insertElection('OPEN');
+    const state = await sqlStateOf(
+      t.prisma.voter.create({ data: { electionId: election.id, identifierHmac: hmac() } }),
+    );
+    expect(state).toBe(SqlState.ELECTION_NOT_DRAFT);
+  });
+
+  it('trigger rejects registering a voter as already voted', async () => {
+    const election = await insertElection();
+    const state = await sqlStateOf(
+      t.prisma.voter.create({
+        data: { electionId: election.id, identifierHmac: hmac(), hasVoted: true },
+      }),
+    );
+    expect(state).toBe(SqlState.VOTER_IMMUTABLE);
+  });
+
+  it('trigger rejects deleting voters after DRAFT', async () => {
+    const { voter } = await voterIn('OPEN');
+    const state = await sqlStateOf(t.prisma.voter.delete({ where: { id: voter.id } }));
+    expect(state).toBe(SqlState.ELECTION_NOT_DRAFT);
+  });
+
+  it('trigger rejects swapping the identifier hash', async () => {
+    const { voter } = await voterIn('DRAFT');
+    const state = await sqlStateOf(
+      t.prisma.voter.update({ where: { id: voter.id }, data: { identifierHmac: hmac() } }),
+    );
+    expect(state).toBe(SqlState.VOTER_IMMUTABLE);
+  });
+
+  it('trigger rejects marking has_voted while the election is DRAFT', async () => {
+    const { voter } = await voterIn('DRAFT');
+    const state = await sqlStateOf(
+      t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+    );
+    expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
+  });
+
+  it('allows has_voted false -> true while OPEN, and never back', async () => {
+    const { voter } = await voterIn('OPEN');
+    expect(
+      await sqlStateOf(
+        t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+      ),
+    ).toBeUndefined();
+    expect(
+      await sqlStateOf(
+        t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: false } }),
+      ),
+    ).toBe(SqlState.VOTER_IMMUTABLE);
+  });
+
+  it('trigger rejects marking has_voted after the election is CLOSED', async () => {
+    const { election, voter } = await voterIn('OPEN');
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'CLOSED' } });
+    const state = await sqlStateOf(
+      t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+    );
+    expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
   });
 });

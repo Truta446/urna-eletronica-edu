@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { inject } from 'vitest';
@@ -10,6 +11,8 @@ import type { Clock } from '../../src/shared/clock.js';
 export const ADMIN_TOKEN = generateToken();
 export const adminHeaders = { authorization: `Bearer ${ADMIN_TOKEN}` } as const;
 const ADMIN_CREDENTIALS = [{ label: 'test-admin', tokenHash: hashToken(ADMIN_TOKEN) }];
+/** Pepper aleatório por execução: nenhum teste pode depender de um valor fixo. */
+export const VOTER_ID_PEPPER = randomBytes(32);
 
 export interface TestApp {
   app: FastifyInstance;
@@ -39,7 +42,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const prisma = createPrismaClient(options.databaseUrl ?? inject('databaseUrl'));
   const logs: Record<string, unknown>[] = [];
   const app = buildApp({
-    env: { NODE_ENV: 'test', LOG_LEVEL: 'info', ADMIN_CREDENTIALS },
+    env: { NODE_ENV: 'test', LOG_LEVEL: 'info', ADMIN_CREDENTIALS, VOTER_ID_PEPPER },
     prisma,
     ...(options.clock && { clock: options.clock }),
     logStream: captureLogs(logs),

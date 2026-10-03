@@ -4,8 +4,10 @@ import { resetDatabase } from '../helpers/database.js';
 import {
   addCandidate,
   createElection,
+  createReadyElection,
   electionPayload,
   openElection,
+  registerVoter,
   type ElectionBody,
 } from '../helpers/factories.js';
 import { createFakeClock, HOUR } from '../helpers/fake-clock.js';
@@ -32,8 +34,7 @@ const post = (url: string, payload?: Record<string, unknown>) =>
   );
 
 async function openWithCandidate(): Promise<ElectionBody> {
-  const election = await createElection(t, clock.now());
-  await addCandidate(t, election.id, { number: 10, name: 'Ana' });
+  const election = await createReadyElection(t, clock.now());
   const response = await openElection(t, election.id);
   expect(response.statusCode).toBe(200);
   return response.json<ElectionBody>();
@@ -140,6 +141,14 @@ describe('POST /admin/elections/:id/open', () => {
 
   it('refuses to open without candidates (422)', async () => {
     const election = await createElection(t, clock.now());
+    await registerVoter(t, election.id);
+    const response = await openElection(t, election.id);
+    expect(response.statusCode).toBe(422);
+  });
+
+  it('refuses to open without voters (422)', async () => {
+    const election = await createElection(t, clock.now());
+    await addCandidate(t, election.id, { number: 10, name: 'Ana' });
     const response = await openElection(t, election.id);
     expect(response.statusCode).toBe(422);
   });
@@ -151,8 +160,7 @@ describe('POST /admin/elections/:id/open', () => {
   });
 
   it('refuses to open after the window has ended (422)', async () => {
-    const election = await createElection(t, clock.now());
-    await addCandidate(t, election.id, { number: 10, name: 'Ana' });
+    const election = await createReadyElection(t, clock.now());
     clock.set(new Date(election.endsAt));
     const response = await openElection(t, election.id);
     expect(response.statusCode).toBe(422);
@@ -164,8 +172,7 @@ describe('POST /admin/elections/:id/open', () => {
   });
 
   it('opens exactly once under 20 concurrent requests', async () => {
-    const election = await createElection(t, clock.now());
-    await addCandidate(t, election.id, { number: 10, name: 'Ana' });
+    const election = await createReadyElection(t, clock.now());
 
     const responses = await Promise.all(
       Array.from({ length: 20 }, () => openElection(t, election.id)),

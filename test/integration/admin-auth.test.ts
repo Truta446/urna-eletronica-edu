@@ -18,6 +18,7 @@ const adminRoutes = [
   ['POST', `/admin/elections/${randomUUID()}/open`],
   ['POST', `/admin/elections/${randomUUID()}/close`],
   ['POST', `/admin/elections/${randomUUID()}/candidates`],
+  ['POST', `/admin/elections/${randomUUID()}/voters`],
 ] as const;
 
 const badHeaders: [string, Record<string, string>][] = [

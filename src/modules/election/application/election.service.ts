@@ -50,7 +50,13 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
   async function open(id: string): Promise<Election> {
     const now = clock.now();
     const [opened] = await prisma.election.updateManyAndReturn({
-      where: { id, status: 'DRAFT', endsAt: { gt: now }, candidates: { some: {} } },
+      where: {
+        id,
+        status: 'DRAFT',
+        endsAt: { gt: now },
+        candidates: { some: {} },
+        voters: { some: {} },
+      },
       data: { status: 'OPEN' },
       select: electionSelect,
     });
@@ -59,7 +65,7 @@ export function createElectionService({ prisma, clock }: ElectionServiceDeps) {
     const current = await get(id);
     if (current.status !== 'DRAFT') throw wrongStatus(current.status, 'DRAFT');
     if (current.endsAt <= now) throw new BusinessRuleError('Election window has already ended');
-    throw new BusinessRuleError('Election needs at least one candidate to open');
+    throw new BusinessRuleError('Election needs at least one candidate and one voter to open');
   }
 
   /** Só depois de endsAt: um administrador não pode encerrar a votação antes da hora. */

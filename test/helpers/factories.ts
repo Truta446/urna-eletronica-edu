@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import type { TestApp } from './test-app.js';
 import { adminHeaders } from './test-app.js';
+import { randomCpf } from './cpf.js';
 import { HOUR } from './fake-clock.js';
 
 export interface ElectionBody {
@@ -47,6 +48,23 @@ export async function addCandidate(
     headers: adminHeaders,
     payload: candidate,
   });
+}
+
+export async function registerVoter({ app }: TestApp, electionId: string, cpf = randomCpf()) {
+  return app.inject({
+    method: 'POST',
+    url: `/admin/elections/${electionId}/voters`,
+    headers: adminHeaders,
+    payload: { voterIdentifier: cpf },
+  });
+}
+
+/** Eleição pronta para abrir: 1 candidato e 1 eleitor. */
+export async function createReadyElection(t: TestApp, now: Date): Promise<ElectionBody> {
+  const election = await createElection(t, now);
+  expect((await addCandidate(t, election.id, { number: 10, name: 'Ana' })).statusCode).toBe(201);
+  expect((await registerVoter(t, election.id)).statusCode).toBe(201);
+  return election;
 }
 
 export async function openElection({ app }: TestApp, electionId: string) {

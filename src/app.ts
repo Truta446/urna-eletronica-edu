@@ -7,13 +7,16 @@ import { registerCandidateRoutes } from './modules/candidate/http/candidate.rout
 import { createElectionService } from './modules/election/application/election.service.js';
 import { registerElectionRoutes } from './modules/election/http/election.routes.js';
 import { registerHealthRoutes } from './modules/health/health.routes.js';
+import { createVoterService } from './modules/voter/application/voter.service.js';
+import { registerVoterRoutes } from './modules/voter/http/voter.routes.js';
+import { createVoterIdentifierHasher } from './security/voter-identifier.js';
 import { systemClock, type Clock } from './shared/clock.js';
 import { registerErrorHandling } from './shared/errors/error-handler.js';
 import { requireAdmin } from './shared/http/admin-auth.js';
 import { buildLoggerOptions } from './shared/logging/logger.js';
 
 export interface AppDependencies {
-  env: Pick<Env, 'LOG_LEVEL' | 'NODE_ENV' | 'ADMIN_CREDENTIALS'>;
+  env: Pick<Env, 'LOG_LEVEL' | 'NODE_ENV' | 'ADMIN_CREDENTIALS' | 'VOTER_ID_PEPPER'>;
   prisma: PrismaClient;
   /** Injetável para que testes controlem o tempo (abrir/fechar eleições). */
   clock?: Clock;
@@ -52,6 +55,13 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   registerCandidateRoutes(app, {
     candidates: createCandidateService({ prisma }),
+    requireAdmin: adminOnly,
+  });
+  registerVoterRoutes(app, {
+    voters: createVoterService({
+      prisma,
+      hashVoterIdentifier: createVoterIdentifierHasher(deps.env.VOTER_ID_PEPPER),
+    }),
     requireAdmin: adminOnly,
   });
 
