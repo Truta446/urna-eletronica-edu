@@ -239,11 +239,16 @@ describe('voters table', () => {
     expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
   });
 
-  it('allows has_voted false -> true while OPEN, and never back', async () => {
-    const { voter } = await voterIn('OPEN');
+  it('allows has_voted false -> true while OPEN (paired with a session), and never back', async () => {
+    const { election, voter } = await voterIn('OPEN');
     expect(
       await sqlStateOf(
-        t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+        t.prisma.$transaction([
+          t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+          t.prisma.votingSession.create({
+            data: { electionId: election.id, tokenHash: hmac(), expiresAt: future(1) },
+          }),
+        ]),
       ),
     ).toBeUndefined();
     expect(
@@ -260,5 +265,131 @@ describe('voters table', () => {
       t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
     );
     expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
+  });
+});
+
+describe('voting_sessions table', () => {
+  const hash = () => randomBytes(32);
+  const later = () => future(1);
+
+  /** Habilitação legítima feita "à mão": marca eleitor e cria sessão na mesma transação. */
+  async function authorizedSession() {
+    const election = await insertElection('DRAFT');
+    const voter = await t.prisma.voter.create({
+      data: { electionId: election.id, identifierHmac: hash() },
+    });
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'OPEN' } });
+    const [, session] = await t.prisma.$transaction([
+      t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: hash(), expiresAt: later() },
+      }),
+    ]);
+    return { election, voter, session };
+  }
+
+  it('accepts voter flag + session in the same transaction', async () => {
+    const { session } = await authorizedSession();
+    expect(session.consumed).toBe(false);
+  });
+
+  it('BALANCE: rejects a session created without authorizing a voter (ballot stuffing)', async () => {
+    const { election } = await authorizedSession();
+    const state = await sqlStateOf(
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: hash(), expiresAt: later() },
+      }),
+    );
+    expect(state).toBe(SqlState.AUTHORIZATION_UNBALANCED);
+    expect(await t.prisma.votingSession.count()).toBe(1);
+  });
+
+  it('BALANCE: rejects authorizing a voter without creating a session', async () => {
+    const election = await insertElection('DRAFT');
+    const voter = await t.prisma.voter.create({
+      data: { electionId: election.id, identifierHmac: hash() },
+    });
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'OPEN' } });
+    const state = await sqlStateOf(
+      t.prisma.voter.update({ where: { id: voter.id }, data: { hasVoted: true } }),
+    );
+    expect(state).toBe(SqlState.AUTHORIZATION_UNBALANCED);
+    expect((await t.prisma.voter.findUniqueOrThrow({ where: { id: voter.id } })).hasVoted).toBe(
+      false,
+    );
+  });
+
+  it('CHECK rejects a token hash that is not 32 bytes (e.g. a raw token)', async () => {
+    const { election } = await authorizedSession();
+    const state = await sqlStateOf(
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: Buffer.from('raw-token'), expiresAt: later() },
+      }),
+    );
+    expect(state).toBe(SqlState.CHECK_VIOLATION);
+  });
+
+  it('UNIQUE rejects a repeated token hash', async () => {
+    const { election, session } = await authorizedSession();
+    const state = await sqlStateOf(
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: session.tokenHash, expiresAt: later() },
+      }),
+    );
+    expect(state).toBe(SqlState.UNIQUE_VIOLATION);
+  });
+
+  it('trigger rejects sessions in a DRAFT election', async () => {
+    const election = await insertElection('DRAFT');
+    const state = await sqlStateOf(
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: hash(), expiresAt: later() },
+      }),
+    );
+    expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
+  });
+
+  it('trigger rejects sessions created already consumed', async () => {
+    const election = await insertElection('OPEN');
+    const state = await sqlStateOf(
+      t.prisma.votingSession.create({
+        data: { electionId: election.id, tokenHash: hash(), expiresAt: later(), consumed: true },
+      }),
+    );
+    expect(state).toBe(SqlState.SESSION_IMMUTABLE);
+  });
+
+  it.each([
+    ['token_hash', () => ({ tokenHash: randomBytes(32) })],
+    ['expires_at (extending validity)', () => ({ expiresAt: future(100) })],
+  ])('trigger rejects changing %s', async (_label, data) => {
+    const { session } = await authorizedSession();
+    const state = await sqlStateOf(
+      t.prisma.votingSession.update({ where: { id: session.id }, data: data() }),
+    );
+    expect(state).toBe(SqlState.SESSION_IMMUTABLE);
+  });
+
+  it('allows consumed false -> true while OPEN, and never back', async () => {
+    const { session } = await authorizedSession();
+    const consume = (consumed: boolean) =>
+      sqlStateOf(t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed } }));
+    expect(await consume(true)).toBeUndefined();
+    expect(await consume(false)).toBe(SqlState.SESSION_IMMUTABLE);
+  });
+
+  it('trigger rejects consuming after the election is CLOSED', async () => {
+    const { election, session } = await authorizedSession();
+    await t.prisma.election.update({ where: { id: election.id }, data: { status: 'CLOSED' } });
+    const state = await sqlStateOf(
+      t.prisma.votingSession.update({ where: { id: session.id }, data: { consumed: true } }),
+    );
+    expect(state).toBe(SqlState.ELECTION_NOT_OPEN);
+  });
+
+  it('trigger rejects deleting sessions', async () => {
+    const { session } = await authorizedSession();
+    const state = await sqlStateOf(t.prisma.votingSession.delete({ where: { id: session.id } }));
+    expect(state).toBe(SqlState.SESSION_IMMUTABLE);
   });
 });

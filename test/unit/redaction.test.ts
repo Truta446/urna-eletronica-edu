@@ -36,9 +36,9 @@ describe('log redaction', () => {
     testApp.app.log.info(
       {
         token: 'raw-token',
-        ballot: { choice: { candidateNumber: 42 } },
+        ballot: { choice: { candidate: 'CHOICE-MARKER' } },
         voter: { voterIdentifier: '123.456.789-00' },
-        config: { pepper: 'pepper-value', privateKey: 'pk' },
+        config: { pepper: 'pepper-value', privateKey: 'PRIVATE-KEY-MARKER' },
       },
       'oops',
     );
@@ -50,6 +50,10 @@ describe('log redaction', () => {
       voter: { voterIdentifier: REDACTED },
       config: { pepper: REDACTED, privateKey: REDACTED },
     });
-    expect(JSON.stringify(line)).not.toMatch(/raw-token|123\.456|pepper-value|42/);
+    // Marcadores textuais únicos: números como "42" aparecem por acaso em `pid`/`time`
+    // e tornavam este teste intermitente.
+    expect(JSON.stringify(line)).not.toMatch(
+      /raw-token|123\.456|pepper-value|CHOICE-MARKER|PRIVATE-KEY-MARKER/,
+    );
   });
 });

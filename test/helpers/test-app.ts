@@ -11,6 +11,12 @@ import type { Clock } from '../../src/shared/clock.js';
 export const ADMIN_TOKEN = generateToken();
 export const adminHeaders = { authorization: `Bearer ${ADMIN_TOKEN}` } as const;
 const ADMIN_CREDENTIALS = [{ label: 'test-admin', tokenHash: hashToken(ADMIN_TOKEN) }];
+export const POLL_WORKER_TOKEN = generateToken();
+export const pollWorkerHeaders = { authorization: `Bearer ${POLL_WORKER_TOKEN}` } as const;
+const POLL_WORKER_CREDENTIALS = [
+  { label: 'test-poll-worker', tokenHash: hashToken(POLL_WORKER_TOKEN) },
+];
+export const VOTING_SESSION_TTL_SECONDS = 300;
 /** Pepper aleatório por execução: nenhum teste pode depender de um valor fixo. */
 export const VOTER_ID_PEPPER = randomBytes(32);
 
@@ -42,7 +48,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const prisma = createPrismaClient(options.databaseUrl ?? inject('databaseUrl'));
   const logs: Record<string, unknown>[] = [];
   const app = buildApp({
-    env: { NODE_ENV: 'test', LOG_LEVEL: 'info', ADMIN_CREDENTIALS, VOTER_ID_PEPPER },
+    env: {
+      NODE_ENV: 'test',
+      LOG_LEVEL: 'info',
+      ADMIN_CREDENTIALS,
+      POLL_WORKER_CREDENTIALS,
+      VOTER_ID_PEPPER,
+      VOTING_SESSION_TTL_SECONDS,
+    },
     prisma,
     ...(options.clock && { clock: options.clock }),
     logStream: captureLogs(logs),

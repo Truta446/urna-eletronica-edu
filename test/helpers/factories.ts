@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import type { TestApp } from './test-app.js';
-import { adminHeaders } from './test-app.js';
+import { adminHeaders, pollWorkerHeaders } from './test-app.js';
+import type { FakeClock } from './fake-clock.js';
 import { randomCpf } from './cpf.js';
 import { HOUR } from './fake-clock.js';
 
@@ -65,6 +66,38 @@ export async function createReadyElection(t: TestApp, now: Date): Promise<Electi
   expect((await addCandidate(t, election.id, { number: 10, name: 'Ana' })).statusCode).toBe(201);
   expect((await registerVoter(t, election.id)).statusCode).toBe(201);
   return election;
+}
+
+export async function authorizeVoter({ app }: TestApp, electionId: string, cpf: string) {
+  return app.inject({
+    method: 'POST',
+    url: `/elections/${electionId}/voting-sessions`,
+    headers: pollWorkerHeaders,
+    payload: { voterIdentifier: cpf },
+  });
+}
+
+/**
+ * Eleição OPEN, com o relógio já dentro da janela de votação.
+ * Devolve os CPFs cadastrados para os testes habilitarem.
+ */
+export async function createVotingElection(
+  t: TestApp,
+  clock: FakeClock,
+  options: { voters?: number; candidates?: number[] } = {},
+): Promise<{ election: ElectionBody; cpfs: string[] }> {
+  const { voters = 1, candidates = [10, 20] } = options;
+  const election = await createElection(t, clock.now());
+  for (const number of candidates) {
+    expect((await addCandidate(t, election.id, { number, name: `C${number}` })).statusCode).toBe(
+      201,
+    );
+  }
+  const cpfs = Array.from({ length: voters }, () => randomCpf());
+  for (const cpf of cpfs) expect((await registerVoter(t, election.id, cpf)).statusCode).toBe(201);
+  expect((await openElection(t, election.id)).statusCode).toBe(200);
+  clock.set(new Date(election.startsAt));
+  return { election, cpfs };
 }
 
 export async function openElection({ app }: TestApp, electionId: string) {
