@@ -4,3 +4,5 @@ coverage/
 src/generated/
 .env
 *.log
+web/test-results/
+web/playwright-report/

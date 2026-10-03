@@ -27,7 +27,11 @@
     "verify:result": "tsx scripts/verify-result.ts",
     "trustees:keygen": "tsx scripts/trustees-keygen.ts",
     "demo": "tsx --env-file-if-exists=.env scripts/demo.ts",
-    "bench": "tsx --env-file-if-exists=.env scripts/bench.ts"
+    "bench": "tsx --env-file-if-exists=.env scripts/bench.ts",
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:lint": "npm --prefix web run lint",
+    "web:e2e": "npm --prefix web run e2e"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",

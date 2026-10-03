@@ -1,0 +1,37 @@
+{
+  "name": "urna-eletronica-edu-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Front de estudo da urna educacional. Não use em eleições reais.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@hpke/core": "^1.9.0",
+    "@hpke/dhkem-x25519": "^1.8.0",
+    "canonicalize": "^5.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "shamir-secret-sharing": "^0.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vite": "^8.3.2"
+  }
+}

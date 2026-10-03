@@ -4,3 +4,7 @@ coverage
 src/generated
 prisma/migrations/**/*.sql
 package-lock.json
+web/dist
+web/node_modules
+web/test-results
+web/playwright-report
