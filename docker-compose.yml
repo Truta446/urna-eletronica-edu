@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: urna-postgres
+    environment:
+      POSTGRES_USER: urna
+      POSTGRES_PASSWORD: urna_dev_password
+      POSTGRES_DB: urna
+    ports:
+      # 127.0.0.1 evita expor o banco na rede local; a porta padrão 5440 evita conflito com um Postgres do host.
+      - '127.0.0.1:${POSTGRES_PORT:-5440}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U urna -d urna']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  postgres-data:

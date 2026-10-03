@@ -1,0 +1,13 @@
+// Modelos de domínio entram a partir da Fase 2.
+// Invariantes que o Prisma não expressa (CHECK, triggers, roles) ficam em SQL nas migrations.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
