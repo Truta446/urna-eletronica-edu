@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-9%20%C2%B7%20hardening-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-10%20%C2%B7%20conclu%C3%ADdo-2e8b57?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -228,7 +228,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 7** — Apuração determinística + testes de consistência
 - [x] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
 - [x] **Fase 9** — Hardening
-- [ ] **Fase 10** — Atacando o próprio sistema
+- [x] **Fase 10** — Atacando o próprio sistema
 
 ### Invariantes que os testes vão provar
 
@@ -308,13 +308,14 @@ Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 
 > Os documentos evoluem a cada fase.
 
-| Documento                                              | Conteúdo                                          |
-| ------------------------------------------------------ | ------------------------------------------------- |
-| [`docs/architecture.md`](docs/architecture.md)         | Componentes, fluxos e diagramas Mermaid           |
-| [`docs/threat-model.md`](docs/threat-model.md)         | Ameaças, atacantes, mitigações e riscos residuais |
-| [`docs/voting-flow.md`](docs/voting-flow.md)           | Passo a passo do voto, da habilitação à apuração  |
-| [`docs/security.md`](docs/security.md)                 | Criptografia, chaves, logs e redaction            |
-| [`docs/hardening-review.md`](docs/hardening-review.md) | Revisão de segurança da Fase 9                    |
+| Documento                                              | Conteúdo                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`docs/architecture.md`](docs/architecture.md)         | Componentes, fluxos e diagramas Mermaid                               |
+| [`docs/threat-model.md`](docs/threat-model.md)         | Ameaças, atacantes, mitigações e riscos residuais                     |
+| [`docs/voting-flow.md`](docs/voting-flow.md)           | Passo a passo do voto, da habilitação à apuração                      |
+| [`docs/security.md`](docs/security.md)                 | Criptografia, chaves, logs e redaction                                |
+| [`docs/hardening-review.md`](docs/hardening-review.md) | Revisão de segurança da Fase 9                                        |
+| [`docs/attack-report.md`](docs/attack-report.md)       | Fase 10: ataques ao próprio sistema, correções e o que ainda funciona |
 
 ## 🔗 Referências
 
