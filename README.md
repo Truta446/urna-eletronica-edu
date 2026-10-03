@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-5%20%C2%B7%20voto-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-6%20%C2%B7%20auditoria-f2c94c?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -224,7 +224,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 3** — Eleitores (HMAC + pepper, sem identificação em claro)
 - [x] **Fase 4** — Autorização de votação (token aleatório, expirável, single-use, hash no banco)
 - [x] **Fase 5** — Voto (transações, concorrência, idempotência, anonimato)
-- [ ] **Fase 6** — Auditoria (hash chain + `verifyAuditChain()`)
+- [x] **Fase 6** — Auditoria (hash chain + `verifyAuditChain()`)
 - [ ] **Fase 7** — Apuração determinística + testes de consistência
 - [ ] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
 - [ ] **Fase 9** — Hardening
@@ -282,17 +282,18 @@ curl -s localhost:3000/admin/elections -H "Authorization: Bearer $TOKEN" \
   -d '{"name":"Grêmio","startsAt":"2030-01-01T08:00:00Z","endsAt":"2030-01-01T17:00:00Z"}'
 ```
 
-| Endpoint                                    | Acesso                     | Fase |
-| ------------------------------------------- | -------------------------- | ---- |
-| `GET /health`, `GET /health/ready`          | público                    | 1    |
-| `POST /admin/elections`                     | admin                      | 2    |
-| `GET /elections/:id`                        | público                    | 2    |
-| `POST /admin/elections/:id/open` · `/close` | admin                      | 2    |
-| `POST /admin/elections/:id/candidates`      | admin                      | 2    |
-| `GET /elections/:id/candidates`             | público                    | 2    |
-| `POST /admin/elections/:id/voters`          | admin                      | 3    |
-| `POST /elections/:id/voting-sessions`       | mesário                    | 4    |
-| `POST /ballots`                             | eleitor (token de votação) | 5    |
+| Endpoint                                      | Acesso                     | Fase |
+| --------------------------------------------- | -------------------------- | ---- |
+| `GET /health`, `GET /health/ready`            | público                    | 1    |
+| `POST /admin/elections`                       | admin                      | 2    |
+| `GET /elections/:id`                          | público                    | 2    |
+| `POST /admin/elections/:id/open` · `/close`   | admin                      | 2    |
+| `POST /admin/elections/:id/candidates`        | admin                      | 2    |
+| `GET /elections/:id/candidates`               | público                    | 2    |
+| `POST /admin/elections/:id/voters`            | admin                      | 3    |
+| `POST /elections/:id/voting-sessions`         | mesário                    | 4    |
+| `POST /ballots`                               | eleitor (token de votação) | 5    |
+| `GET /admin/audit`, `GET /admin/audit/verify` | admin                      | 6    |
 
 Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 

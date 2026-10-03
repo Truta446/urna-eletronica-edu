@@ -207,8 +207,26 @@ Os registros são apagados no fechamento da eleição, na mesma transação do `
 
 ## 7. Auditoria
 
-- `GET /admin/elections/:id/audit`: eventos paginados
-- `GET /admin/audit/verify`: executa `verifyAuditChain()` e informa o primeiro evento inválido, se houver
+Só admin.
+
+- `GET /admin/audit?electionId=&afterSeq=0&limit=100` (`limit` ≤ 500) → `{ "events": [...], "nextAfterSeq": n | null }`
+  - cada evento: `seq`, `eventType`, `actorType`, `actorIdentifier`, `electionId`, `payload`, `createdAt`, `previousHash`, `eventHash`
+- `GET /admin/audit/verify[?anchorSeq=&anchorHash=]` → sempre `200`, com um relatório:
+  - `{ "valid": true, "eventCount": n, "head": { "seq", "hash" } }`
+  - `{ "valid": false, "eventCount": n, "failure": { "seq", "reason" } }`, com `reason` ∈ `SEQUENCE_GAP`, `BROKEN_LINK`, `HASH_MISMATCH`, `ANCHOR_MISMATCH`, `ANCHOR_NOT_FOUND`
+
+| Evento                              | Ator        | Payload                           |
+| ----------------------------------- | ----------- | --------------------------------- |
+| `ELECTION_CREATED`                  | ADMIN       | `name`, `startsAt`, `endsAt`      |
+| `CANDIDATE_CREATED`                 | ADMIN       | `candidateId`, `number`, `name`   |
+| `VOTER_REGISTERED`                  | ADMIN       | `voterId` (nunca o CPF)           |
+| `ELECTION_OPENED`                   | ADMIN       | —                                 |
+| `VOTER_AUTHORIZED`                  | POLL_WORKER | — (**sem eleitor**, de propósito) |
+| `ELECTION_CLOSED`                   | ADMIN       | —                                 |
+| `BALLOT_BOX_SEALED`                 | SYSTEM      | contagens finais                  |
+| `TALLY_STARTED` / `TALLY_COMPLETED` | —           | Fase 7                            |
+
+Não existe `VOTE_ACCEPTED`: um evento por voto, com horário, permitiria correlacionar habilitação e voto.
 
 ## Máquina de estados
 

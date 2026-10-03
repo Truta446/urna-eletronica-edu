@@ -138,15 +138,49 @@ dump lógico 🟡 parcialmente mitigado. Contra acesso físico durante a eleiç�
 ElectionGuard/Helios). Permite apurar sem decifrar votos individuais, mas exige provas de conhecimento
 zero para garantir que cada ballot é válido. Fica como referência, fora do escopo.
 
-## Audit log (Fase 6)
+## Audit log (Fase 6 — implementado)
 
-- `eventHash = SHA-256(JSON canônico (RFC 8785) do evento ‖ previousHash)`; o primeiro evento usa um hash gênese fixo.
-- `seq bigint` contíguo e `UNIQUE`; escrita serializada com `pg_advisory_xact_lock`.
-- `verifyAuditChain()` detecta edição, remoção e reordenação.
-- **Limitações:** truncamento da cauda e reescrita completa da cadeia não são detectáveis sem uma
-  âncora externa (hash do último evento publicado fora do banco, checkpoints assinados).
-- Eventos **nunca** contêm escolha de voto, token, identificador de eleitor nem dados que permitam
-  correlacionar habilitação com voto.
+```text
+eventHash = SHA-256( JCS({seq, eventType, actorType, actorIdentifier, electionId, payload, createdAt})
+                     ‖ previousHash )
+previousHash do evento 1 = 32 bytes zero
+```
+
+- **JSON canônico (RFC 8785)** via `canonicalize` (biblioteca do coautor da RFC). O payload volta do
+  `jsonb` com as chaves em outra ordem e mesmo assim gera os mesmos bytes. Payloads só aceitam
+  primitivos, para evitar as armadilhas de serialização de números não inteiros.
+- **`seq` entra no hash:** trocar a posição de um evento muda o hash dele.
+- **Escrita na mesma transação da operação** (`appendAuditEvent(tx, …)`): o evento existe se e
+  somente se a operação foi confirmada. Testado: operações rejeitadas não deixam evento.
+- **Serialização:** `pg_advisory_xact_lock` até o COMMIT, sempre como **último** lock da transação
+  (evita deadlock). Custo: todas as escritas auditadas, inclusive as habilitações, passam por esse lock.
+- **No banco:** `INSERT` exige `seq` contíguo e `previous_hash` igual ao `event_hash` do anterior
+  (`UE011`). `UPDATE`, `DELETE` e `TRUNCATE` são bloqueados (`UE010`). Nem a role da aplicação
+  consegue bifurcar a cadeia. Teste de mutação: sem o advisory lock, o banco ainda impede a
+  bifurcação; a escrita perdedora falha (disponibilidade), mas a cadeia continua íntegra.
+- **`verifyAuditChain()`** (`src/modules/audit/domain/audit-chain.ts`) é uma função pura e
+  incremental (verifica em páginas de 1000). Detecta:
+
+| Ataque                                                  | Resultado                                                       |
+| ------------------------------------------------------- | --------------------------------------------------------------- |
+| Evento alterado (payload, ator, horário, tipo, eleição) | `HASH_MISMATCH` no evento                                       |
+| Evento alterado **com o hash dele recalculado**         | `BROKEN_LINK` no evento seguinte                                |
+| Evento removido no meio (ou o primeiro)                 | `SEQUENCE_GAP`                                                  |
+| Ordem alterada (troca de `seq`)                         | falha no primeiro evento afetado                                |
+| Últimos eventos apagados                                | ❌ **não detectado** sem âncora → `ANCHOR_NOT_FOUND` com âncora |
+| Cadeia inteira reescrita de forma consistente           | ❌ **não detectado** sem âncora → `ANCHOR_MISMATCH` com âncora  |
+
+**Âncora:** `GET /admin/audit/verify?anchorSeq=N&anchorHash=…` confere que o evento `N` existe e
+tem aquele hash. A âncora só funciona se for publicada **fora** do banco, em lugar que o atacante não
+controla (outro sistema, e-mail para fiscais, papel). Este projeto não automatiza a publicação.
+
+**O que não entra no log:**
+
+- `VOTER_AUTHORIZED` não leva o id do eleitor. O horário do evento é o mesmo instante usado no
+  `expires_at` da sessão, então com o id do eleitor um dump lógico ligaria eleitor e sessão.
+- Não há evento por voto. `BALLOT_BOX_SEALED` registra, no fechamento, as contagens finais
+  (votos, sessões consumidas, habilitados, cadastrados, habilitados sem voto).
+- Nenhum CPF, HMAC de CPF, token, id de voto ou escolha. Testado varrendo a tabela inteira.
 
 ## Logs e redaction (Fase 1 — implementado)
 
