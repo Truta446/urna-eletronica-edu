@@ -3,7 +3,8 @@ import { defineConfig } from 'vite';
 
 /**
  * O front conversa com a API pelo proxy do Vite (/api -> :3000). Mesma origem para o browser:
- * o backend não precisa (e não tem) CORS.
+ * o backend não precisa (e não tem) CORS. API_TARGET=http://127.0.0.1:3010 aponta para o backend
+ * em Rust (mesmo contrato HTTP).
  */
 export default defineConfig({
   plugins: [react()],
@@ -13,7 +14,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.API_TARGET ?? 'http://127.0.0.1:3000',
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },

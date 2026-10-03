@@ -2,7 +2,7 @@
   "name": "urna-eletronica-edu",
   "version": "0.1.0",
   "private": true,
-  "description": "Prot\u00f3tipo educacional de backend de urna eletr\u00f4nica. N\u00e3o use em elei\u00e7\u00f5es reais.",
+  "description": "Protótipo educacional de backend de urna eletrônica. Não use em eleições reais.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -32,7 +32,12 @@
     "web:build": "npm --prefix web run build",
     "web:lint": "npm --prefix web run lint",
     "web:e2e": "npm --prefix web run e2e",
-    "bench:national": "tsx --env-file-if-exists=.env scripts/bench-national.ts"
+    "bench:national": "tsx --env-file-if-exists=.env scripts/bench-national.ts",
+    "rust:fixtures": "tsx scripts/rust-fixtures.ts",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
+    "rust:build": "cargo build --release --manifest-path rust/Cargo.toml",
+    "rust:start": "rust/target/release/urna-server",
+    "bench:compare": "tsx --env-file-if-exists=.env scripts/bench-compare.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
