@@ -277,6 +277,7 @@ curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 | `npm run signing-key:generate`                 | Gera a chave Ed25519 de lacre/resultado                                                       |
 | `npm run verify:result -- <url> <id>`          | Verifica um resultado publicado, sem acesso ao banco                                          |
 | `npm run trustees:keygen -- <partes> <limiar>` | Par HPKE da eleição + partes Shamir da chave privada                                          |
+| `npm run bench -- 1000 10000 50000`            | Benchmark de habilitação, voto, lacre e apuração                                              |
 
 ### Experimentando a API
 
@@ -323,6 +324,7 @@ Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 | [`docs/security.md`](docs/security.md)                 | Criptografia, chaves, logs e redaction                                |
 | [`docs/hardening-review.md`](docs/hardening-review.md) | Revisão de segurança da Fase 9                                        |
 | [`docs/attack-report.md`](docs/attack-report.md)       | Fase 10: ataques ao próprio sistema, correções e o que ainda funciona |
+| [`docs/performance.md`](docs/performance.md)           | Benchmark, gargalos encontrados e corrigidos (O(n²) → O(1), deadlock) |
 
 ## 🔗 Referências
 

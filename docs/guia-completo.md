@@ -8,7 +8,8 @@ foi tomada, quais conceitos de segurança aparecem, o que deu errado no caminho 
 Os outros documentos são referências mais curtas:
 [architecture.md](architecture.md) · [threat-model.md](threat-model.md) ·
 [voting-flow.md](voting-flow.md) (contrato da API) · [security.md](security.md) ·
-[hardening-review.md](hardening-review.md) · [attack-report.md](attack-report.md).
+[hardening-review.md](hardening-review.md) · [attack-report.md](attack-report.md) ·
+[performance.md](performance.md).
 
 ## Sumário
 
@@ -82,6 +83,7 @@ Outros comandos úteis:
 | `npm run verify:result -- <url> <id>` | Refaz a apuração de uma eleição só com dados públicos      |
 | `npm run trustees:keygen -- 5 3`      | Par de chaves de uma eleição cifrada + 5 partes (limiar 3) |
 | `npm run operator:token -- <nome>`    | Token de admin ou mesário + linha para o `.env`            |
+| `npm run bench -- 1000 10000 50000`   | Benchmark (ver [performance.md](performance.md))           |
 | `npm run signing-key:generate`        | Chave Ed25519 que assina lacres e resultados               |
 | `npm run secret:generate`             | 32 bytes aleatórios (ex.: pepper)                          |
 
@@ -574,3 +576,5 @@ Se quiser continuar estudando, cada item abaixo ataca um risco documentado:
 - **Hash lento (scrypt/Argon2)** no identificador do eleitor: fecha parte do 🟡 de banco + pepper vazados.
 - **KMS/HSM** para pepper, chave de assinatura e partes dos trustees.
 - **CI** (GitHub Actions) rodando lint, typecheck e testes com um PostgreSQL de serviço.
+- **Uma cadeia de auditoria por eleição** (ancorada numa global): removeria o gargalo das
+  habilitações descrito em [performance.md](performance.md).
