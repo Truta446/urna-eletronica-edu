@@ -1,0 +1,107 @@
+{
+  "token": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcde",
+  "electionId": "6f1c1c1e-4b7a-4c1e-9b0a-2f6f3d0c9a11",
+  "ballotId": "0c9a2f6f-3d0c-4a11-8b7a-6f1c1c1e4b7a",
+  "candidateId": "11111111-2222-4333-8444-555555555555",
+  "tokenHash": "905edb3f35ec2e0254b1c8678307d4951d923de4ddbe42ef49b5b8287eb90fa6",
+  "nullifier": "3ab965699baa4b3bf0346a1a9acdb17a79fed69fbfa77e0532f499fdb5264928",
+  "idempotencyScope": "5cb5350a4f3f664961ac813633ab4e25950ba7ccc8db3b89a8f56e758e293143",
+  "fingerprints": {
+    "candidate": "e2848365e9de8219a001b684e52be9ba57d047059cb4b34347106ee7054831b4",
+    "blank": "63e2d975860a0626060d388dff6a8b9b0810b166f6976762ba66317782c48a1c",
+    "null": "d2a85bebb2725585348062701cc3f5ecf3734bf4241c97449522490ff1e51ef2"
+  },
+  "commitmentV1": "22872996b88936c6527191438ddbe71a9ccee9d1f11f5cba84a59f1959fe2a0b",
+  "commitmentV1Blank": "003387c7f76b5e4366ea04a8bf2b9e9f28250ba24983c8b1ab1a4f7c85ea5569",
+  "commitmentV2": "1c85f13cba22f73f37c302031c9be07c08221b7fc7e464999a75fef6c4382fb7",
+  "voterHmac": {
+    "pepper": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+    "cpf": "52998224725",
+    "hmac": "ec1fb394d139ce90f3845c497329c54f7121b6eeeeca368018faaf801cc9f80e"
+  },
+  "encodedChoice": "0111111111222243338444555555555555",
+  "merkle": {
+    "leaves": [
+      "",
+      "00",
+      "10",
+      "2021",
+      "3031",
+      "40414243",
+      "5051525354555657",
+      "606162636465666768696a6b6c6d6e6f"
+    ],
+    "roots": [
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+      "fac54203e7cc696cf0dfcb42c92a1d9dbaf70ad9e621f4bd8d98662f00e3c125",
+      "aeb6bcfe274b70a14fb067a5e5578264db0fa9b51af5e0ba159158f329e06e77",
+      "d37ee418976dd95753c1c73862b9398fa2a2cf9b4ff0fdfe8b30cd95209614b7",
+      "4e3bbb1f7b478dcfe71fb631631519a3bca12c9aefca1612bfce4c13a86264d4",
+      "76e67dadbcdf1e10e1b74ddc608abd2f98dfb16fbce75277b5232a127f2087ef",
+      "ddb89be403809e325750d3d263cd78929c2942b7942a34b77e122c9594a74c8c",
+      "5dc9da79a70659a9ad559cb701ded9a2ab9d823aad2f4960cfe370eff4604328"
+    ]
+  },
+  "jcs": {
+    "value": {
+      "b": 1,
+      "a": [
+        2,
+        "é",
+        null
+      ],
+      "c": {
+        "z": true,
+        "y": "x"
+      }
+    },
+    "text": "{\"a\":[2,\"é\",null],\"b\":1,\"c\":{\"y\":\"x\",\"z\":true}}"
+  },
+  "audit": {
+    "format1": "4672b4ffba0008c1511b0d199fb910f093dc0e97375cdc345a9e49fc738ccbea",
+    "format2": "ac593abb68d3af8783a9732a88c94f4c56574a8aaaf121c7c3cb6ae0841fe14b",
+    "previousForFormat2": "0909090909090909090909090909090909090909090909090909090909090909"
+  },
+  "signing": {
+    "privateKeyPkcs8": "MC4CAQAwBQYDK2VwBCIEIN3g15KQQ9S76OP9N5QgYRccf1v8NBchzmDlP7Ub2puu",
+    "publicKeySpki": "MCowBQYDK2VwAyEA4ujf4Yk22aicZbfHJVtG9is0ycYjJBpkryoHNawAivU",
+    "keyId": "d46809ebc0381a00",
+    "statement": "{\"auditHeadHash\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"auditHeadSeq\":9,\"ballots\":3,\"electionId\":\"6f1c1c1e-4b7a-4c1e-9b0a-2f6f3d0c9a11\",\"merkleRoot\":\"abababababababababababababababababababababababababababababababab\",\"sealedAt\":\"2030-01-01T17:00:00.000Z\",\"type\":\"urna-edu/seal/v1\"}",
+    "signature": "dsIO2JwHThey--Om8QoGZ2Lsr3ftgTDHjswhmvWv-oW9YEznaUXPOI2C3o6NKPyST4wES1oq36R4th8gy8eDAg"
+  },
+  "statements": {
+    "authorization": "{\"electionId\":\"6f1c1c1e-4b7a-4c1e-9b0a-2f6f3d0c9a11\",\"issuedAt\":\"2030-01-01T12:00:00.123Z\",\"nonce\":\"abababababababababababababababab\",\"type\":\"urna-edu/authorization/v1\"}",
+    "result": "{\"electionId\":\"6f1c1c1e-4b7a-4c1e-9b0a-2f6f3d0c9a11\",\"merkleRoot\":\"abababababababababababababababababababababababababababababababab\",\"result\":{\"blank\":1,\"candidates\":[{\"candidateId\":\"11111111-2222-4333-8444-555555555555\",\"name\":\"Ana Grêmio\",\"number\":13,\"votes\":2}],\"null\":0,\"totalBallots\":3},\"sealSignature\":\"sig\",\"type\":\"urna-edu/result/v1\"}",
+    "resultHash": "f3726867c6fad782ea5157375118a2d2f6c4d6dd7a966388050e8cabd3cfdcd2",
+    "resultValue": {
+      "candidates": [
+        {
+          "candidateId": "11111111-2222-4333-8444-555555555555",
+          "number": 13,
+          "name": "Ana Grêmio",
+          "votes": 2
+        }
+      ],
+      "blank": 1,
+      "null": 0,
+      "totalBallots": 3
+    }
+  },
+  "shamir": {
+    "secret": "79f44cbf431baf05b7d7f6ad6dc1c0ef588ac53c784f4917249804e1ca2b8c3c",
+    "shares": [
+      "K9wXbCaT9Amryj3nVk_4rG_nSJzKL_mOa5fY61Io6qm_",
+      "axfwWV_K9I5Qv-EtANRvGVdzhsLuMF5NXLgz7mPLgve3",
+      "sGbkb7HxucNkowS_-wJlxBa9Y8Kze5Csc_s9SuvQkD8y",
+      "80JC9sJUV_H29QhBS3YeYMFqTr8aXsoOs4YHTK0x7vHE",
+      "p44dIv9k7bRXmilTb8TuxehvEogOHQ9RCBJVIA69jTHY"
+    ]
+  },
+  "hpke": {
+    "publicKey": "f6sPnO6_3RrJsFQn7MQCQheJRcdV4ymVM74vaEIASDQ",
+    "privateKey": "efRMv0MbrwW31_atbcHA71iKxTx4T0kXJJgE4corjDw",
+    "encapsulatedKey": "-mzQjyJHohskALcf8mvC7f2R9D8ckBaVU86oWIg5WGE",
+    "ciphertext": "sSLwTiNxGEGOo-eXRu-EyrV63gqlrscrOdtE2Znd6VBA"
+  }
+}

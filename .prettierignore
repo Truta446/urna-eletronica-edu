@@ -8,3 +8,5 @@ web/dist
 web/node_modules
 web/test-results
 web/playwright-report
+# Rust: formatado pelo rustfmt; target/ é saída de build
+rust

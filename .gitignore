@@ -6,3 +6,6 @@ src/generated/
 *.log
 web/test-results/
 web/playwright-report/
+
+# Rust
+rust/target
