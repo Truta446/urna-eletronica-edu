@@ -138,9 +138,28 @@ por uma fila única. Detalhes:
    aumentaria a vazão **perdendo votos confirmados numa queda de energia**: não foi testado de propósito.
 3. Como as seções são independentes, o caminho é **particionar**: várias instâncias da aplicação e
    **vários bancos**, cada um com um conjunto de seções (por estado ou zona eleitoral). Neste
-   notebook, um banco faz ~950/s; 6 a 15 bancos (em hardware de servidor, menos) cobririam a média e
+   notebook, um banco faz ~950/s (**corrigido depois:** ~1.400/s, ver a rodada 4); 6 a 15 bancos (em hardware de servidor, menos) cobririam a média e
    os picos nacionais. Nenhuma mudança de código é necessária para isso.
 4. E o mais importante: a urna brasileira real nem é online. Cada urna apura a própria seção offline,
    e só o **boletim de urna assinado** viaja. A arquitetura deste projeto, agora com tudo por eleição,
    é compatível com esse modelo: cada seção poderia ser uma instância isolada, e o centro só agregaria
    boletins verificáveis (o verificador independente já existe).
+
+## Rodada 4: o mesmo backend em Rust
+
+O backend foi reescrito em Rust (`rust/`), com o mesmo contrato HTTP e o mesmo banco, e comparado
+via HTTP real com `npm run bench:compare`. Resultados completos e metodologia em
+[`typescript-vs-rust.md`](typescript-vs-rust.md). Em resumo:
+
+| Mesmo cenário (200 seções × 100 eleitores, mesmo total de conexões) |    Vazão |         CPU | Memória de pico |
+| ------------------------------------------------------------------- | -------: | ----------: | --------------: |
+| TypeScript, 1 processo                                              |   ~500/s |  1,1 núcleo |          347 MB |
+| TypeScript, 4 processos                                             |    884/s | 4,2 núcleos |        1.341 MB |
+| Rust, 1 processo                                                    | ~1.430/s |  1,1 núcleo |           29 MB |
+
+**Correção da rodada 3.** Lá concluí que um PostgreSQL neste notebook tinha teto de ~950/s, porque
+as conexões esperavam em `LWLock:WALWrite`. O Rust atendeu ~1.430/s contra o mesmo banco. Os ~950/s
+eram o teto **da pilha TypeScript** contra esse banco, não o teto do disco. Com o Rust, a vazão para
+de subir entre 128 e 256 requisições simultâneas, enquanto a latência dobra: ali, sim, o limite é o
+PostgreSQL. A estratégia de particionar as seções entre vários bancos continua valendo, mas cada banco
+rende ~50% mais do que eu tinha estimado.

@@ -540,6 +540,34 @@ Segurança do front: tokens só na memória da aba (sem `localStorage`), sem `da
 pelo proxy do Vite (mesma origem, sem CORS no backend), fontes servidas localmente (nenhuma requisição a
 terceiros). Para produção faltaria servir o HTML com CSP própria.
 
+## 9¾. O mesmo backend em Rust (`rust/`)
+
+Depois do front, o backend foi reescrito em Rust (axum + tokio + sqlx) para comparar as duas
+linguagens **com o mesmo sistema**. As ideias principais:
+
+- **O que fica igual é o que mais importa.** O banco, as migrations, os triggers, a role de menor
+  privilégio e o `.env` são os mesmos. As invariantes do banco valem para as duas versões, porque não
+  estão em nenhuma das duas. Os dois servidores podem até atender a mesma eleição ao mesmo tempo.
+- **Equivalência verificada, não suposta.** O TS gera vetores de criptografia que o Rust precisa
+  reproduzir byte a byte (inclusive a assinatura Ed25519, que é determinística). Uma suíte de contrato
+  HTTP (`npm run test:contract`) roda os mesmos 17 testes contra os dois servidores. Para checar que a
+  suíte pega diferenças de verdade, uma regra foi quebrada de propósito no Rust e a suíte falhou. O e2e
+  do navegador e o verificador independente também passam contra o Rust.
+- **O que o Rust trouxe:** ~3× menos CPU por eleitor, de 20 a 50× menos memória, binário de 5 MB, 22 ms
+  para subir e vários núcleos num só processo. Com ele, o gargalo deixou de ser a aplicação e passou
+  a ser o PostgreSQL. Isso também **corrigiu uma conclusão minha**: o "teto de ~950/s do banco" da
+  rodada 3 era, na verdade, o teto da pilha TS contra o banco. O banco aguenta ~1.400/s.
+- **O que o Rust não trouxe:** nenhuma classificação de segurança do sistema mudou. A segurança de
+  memória do código do projeto passa a ser garantida pelo compilador (`#![forbid(unsafe_code)]`), mas
+  o voto secreto contra quem controla o servidor continua não garantido, a cadeia de suprimentos tem
+  tamanho parecido (191 crates contra 205 pacotes) e a reconstrução Shamir foi **portada** (não existe
+  crate compatível com o formato), o que fica registrado como risco conhecido.
+
+Isso responde, com números, à pergunta "JS ou C?" feita no meio do projeto: a linguagem muda custo e
+eficiência, e elimina classes de bugs. Mas o que torna uma urna confiável está fora dela: votação
+offline, hardware dedicado, builds reprodutíveis, código auditado publicamente e procedimentos físicos.
+Detalhes em [`typescript-vs-rust.md`](typescript-vs-rust.md).
+
 ## 10. Como ler o código
 
 Ordem sugerida (do mais simples ao mais denso):

@@ -16,6 +16,7 @@
 ![Zod](https://img.shields.io/badge/Zod-3E67B1?logo=zod&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Rust](https://img.shields.io/badge/tamb%C3%A9m%20em-Rust-B7410E?logo=rust&logoColor=white)
 
 **Um backend de urna eletrônica construído do zero para estudar o que torna um sistema de votação difícil:**<br />
 integridade, voto secreto, auditabilidade, criptografia e concorrência.
@@ -25,6 +26,7 @@ integridade, voto secreto, auditabilidade, criptografia e concorrência.
 [Arquitetura](#-arquitetura) ·
 [Fluxo de voto](#-fluxo-de-voto) ·
 [Ameaças](#-modelo-de-ameaças-resumo) ·
+[TS × Rust](#-typescript--rust) ·
 [Roadmap](#-roadmap)
 
 </div>
@@ -246,6 +248,34 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 | Testes    | Vitest contra PostgreSQL real     | Concorrência não se testa com mock                         |
 | Cripto    | `node:crypto`, libs auditadas     | Nada de criptografia caseira                               |
 
+## 🦀 TypeScript × Rust
+
+O backend também existe em **Rust** (`rust/`: axum, tokio, sqlx), com o **mesmo contrato HTTP, o
+mesmo banco e as mesmas migrations**. A equivalência é verificada, não suposta: vetores de
+criptografia gerados pelo TS que o Rust precisa reproduzir byte a byte, uma suíte de contrato HTTP
+que roda os mesmos testes contra os dois servidores, o e2e do navegador e o verificador
+independente.
+
+| Mesmo cenário, via HTTP, mesmo total de conexões com o banco |       TypeScript (1 processo) | TypeScript (4 processos) |   Rust (1 processo) |
+| ------------------------------------------------------------ | ----------------------------: | -----------------------: | ------------------: |
+| Vazão (eleitores/s, habilitação + voto)                      |                          ~500 |                      884 |          **~1.430** |
+| CPU usada                                                    |                    1,1 núcleo |              4,2 núcleos |      **1,1 núcleo** |
+| CPU por eleitor                                              |                        2,2 ms |                   4,7 ms |          **0,8 ms** |
+| Memória de pico                                              |                        347 MB |                 1.341 MB |           **29 MB** |
+| Pronto para receber requisições em                           |                        235 ms |                   311 ms |           **22 ms** |
+| O que se implanta                                            | ~491 MB (node + node_modules) |                     idem | **binário de 5 MB** |
+
+Com o Rust, o limite passa a ser o PostgreSQL, não a aplicação. Isso **não** muda nenhuma
+classificação de segurança do sistema: as invariantes estão no banco, e o voto secreto contra quem
+controla o servidor continua não garantido nas duas versões. Metodologia, todos os números,
+ressalvas e o que a troca de linguagem garante ou não em [`docs/typescript-vs-rust.md`](docs/typescript-vs-rust.md).
+
+```bash
+npm run rust:build && npm run rust:start             # http://127.0.0.1:3010
+npm run test:contract                                # mesmos testes HTTP contra os dois
+npm run bench:compare -- 200 100 128 40 4            # benchmark comparativo
+```
+
 ## 🗺️ Roadmap
 
 - [x] **Fase 0** — Análise: arquitetura, threat model, modelo de dados, fluxo
@@ -259,6 +289,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
 - [x] **Fase 9** — Hardening
 - [x] **Fase 10** — Atacando o próprio sistema
+- [x] **Extra** — Front de estudo, escala nacional e backend reescrito em Rust
 
 ### Invariantes que os testes vão provar
 
@@ -274,7 +305,7 @@ INV-7  N requisições concorrentes com o mesmo token produzem exatamente 1 voto
 
 ## 🚀 Como rodar
 
-**Pré-requisitos:** Node.js 24+ e Docker.
+**Pré-requisitos:** Node.js 24+ e Docker (e, para o backend em Rust, o [toolchain do Rust](https://rustup.rs) 1.88+).
 
 ```bash
 cp .env.example .env      # valores de desenvolvimento
@@ -304,6 +335,9 @@ curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 | `npm run trustees:keygen -- <partes> <limiar>` | Par HPKE da eleição + partes Shamir da chave privada                                          |
 | `npm run bench -- 1000 10000 50000`            | Benchmark de habilitação, voto, lacre e apuração                                              |
 | `npm run bench:national -- 200 100 64 4`       | Muitas seções votando ao mesmo tempo, N processos da aplicação                                |
+| `npm run test:contract`                        | Mesma suíte HTTP contra o backend TS e o backend Rust                                         |
+| `npm run rust:build` / `npm run rust:start`    | Compila (release) e roda o backend em Rust em http://127.0.0.1:3010                           |
+| `npm run bench:compare -- 200 100 128 40 4`    | TypeScript × Rust via HTTP: vazão, latência, CPU, memória, tamanho                            |
 | `npm run web`                                  | Front de estudo em http://127.0.0.1:5173 (com a API rodando)                                  |
 | `npm run web:e2e`                              | Eleição cifrada inteira pela interface (Playwright)                                           |
 
@@ -343,16 +377,17 @@ Contrato completo em [`docs/voting-flow.md`](docs/voting-flow.md).
 
 > Os documentos evoluem a cada fase.
 
-| Documento                                              | Conteúdo                                                              |
-| ------------------------------------------------------ | --------------------------------------------------------------------- |
-| [`docs/guia-completo.md`](docs/guia-completo.md)       | **Comece aqui:** o projeto inteiro explicado, fase a fase             |
-| [`docs/architecture.md`](docs/architecture.md)         | Componentes, fluxos e diagramas Mermaid                               |
-| [`docs/threat-model.md`](docs/threat-model.md)         | Ameaças, atacantes, mitigações e riscos residuais                     |
-| [`docs/voting-flow.md`](docs/voting-flow.md)           | Passo a passo do voto, da habilitação à apuração                      |
-| [`docs/security.md`](docs/security.md)                 | Criptografia, chaves, logs e redaction                                |
-| [`docs/hardening-review.md`](docs/hardening-review.md) | Revisão de segurança da Fase 9                                        |
-| [`docs/attack-report.md`](docs/attack-report.md)       | Fase 10: ataques ao próprio sistema, correções e o que ainda funciona |
-| [`docs/performance.md`](docs/performance.md)           | Benchmark, gargalos encontrados e corrigidos (O(n²) → O(1), deadlock) |
+| Documento                                                  | Conteúdo                                                              |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`docs/guia-completo.md`](docs/guia-completo.md)           | **Comece aqui:** o projeto inteiro explicado, fase a fase             |
+| [`docs/architecture.md`](docs/architecture.md)             | Componentes, fluxos e diagramas Mermaid                               |
+| [`docs/threat-model.md`](docs/threat-model.md)             | Ameaças, atacantes, mitigações e riscos residuais                     |
+| [`docs/voting-flow.md`](docs/voting-flow.md)               | Passo a passo do voto, da habilitação à apuração                      |
+| [`docs/security.md`](docs/security.md)                     | Criptografia, chaves, logs e redaction                                |
+| [`docs/hardening-review.md`](docs/hardening-review.md)     | Revisão de segurança da Fase 9                                        |
+| [`docs/attack-report.md`](docs/attack-report.md)           | Fase 10: ataques ao próprio sistema, correções e o que ainda funciona |
+| [`docs/performance.md`](docs/performance.md)               | Benchmark, gargalos encontrados e corrigidos (O(n²) → O(1), deadlock) |
+| [`docs/typescript-vs-rust.md`](docs/typescript-vs-rust.md) | As duas implementações: equivalência, benchmark e segurança           |
 
 ## 🔗 Referências
 
