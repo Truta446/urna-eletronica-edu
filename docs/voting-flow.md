@@ -181,29 +181,76 @@ Os registros são apagados no fechamento da eleição, na mesma transação do `
 
 ## 6. Apuração
 
+### Lacre (no fechamento)
+
+`POST /admin/elections/:id/close` grava, na mesma transação, o evento `BALLOT_BOX_SEALED` com:
+
+- contagens finais (votos, sessões consumidas, eleitores habilitados e cadastrados, habilitados sem voto);
+- **Merkle root** (RFC 6962) dos commitments dos votos, em ordem crescente de bytes;
+- **checkpoint da auditoria**: `seq` e hash do evento `ELECTION_CLOSED`;
+- **assinatura Ed25519** sobre a declaração canônica `{type: "urna-edu/seal/v1", electionId, ballots, merkleRoot, auditHeadSeq, auditHeadHash, sealedAt}` e o `keyId`.
+
 ### `POST /admin/elections/:id/tally`
 
-- Só com `CLOSED`. Recalcula e confere a Merkle root, apura e persiste.
-- `CLOSED → TALLIED`
-- Auditoria: `TALLY_STARTED`, `TALLY_COMPLETED`
+Só com `CLOSED`. Antes de contar qualquer voto, confere:
 
-### `GET /elections/:id/tally`
+1. assinatura do lacre;
+2. cadeia de auditoria íntegra até o checkpoint assinado (âncora);
+3. cada voto recalcula o próprio commitment;
+4. nº de votos == nº lacrado e Merkle root == root lacrada;
+5. votos == sessões consumidas.
 
-- `404`/`409` antes da apuração. **Não existe resultado parcial.**
-- `200` →
+Se alguma falhar: `409 INTEGRITY_FAILURE`, evento `TALLY_FAILED { reason }`, a eleição continua `CLOSED`.
+Se todas passarem: contagem por **função pura**, resultado assinado, `CLOSED → TALLIED` com `UPDATE`
+condicional (apurações concorrentes resultam em exatamente uma), eventos `TALLY_STARTED` e
+`TALLY_COMPLETED`. Resposta `201` com o mesmo conteúdo do `GET` abaixo.
+
+### `GET /elections/:id/tally` (público)
+
+`409` antes da apuração. **Não existe resultado parcial.** Depois:
 
 ```json
 {
   "electionId": "…",
-  "candidates": [{ "number": 42, "name": "Fulana de Tal", "votes": 120 }],
-  "blank": 7,
-  "null": 3,
-  "totalBallots": 130,
-  "authorizedWithoutBallot": 2,
+  "electionName": "…",
+  "result": {
+    "candidates": [{ "candidateId": "…", "number": 13, "name": "…", "votes": 2 }],
+    "blank": 1,
+    "null": 0,
+    "totalBallots": 3
+  },
   "merkleRoot": "…",
-  "resultHash": "…"
+  "resultHash": "…",
+  "signature": "…",
+  "keyId": "…",
+  "publicKey": "… (Ed25519, SPKI DER, base64url)",
+  "seal": {
+    "ballots": 3,
+    "merkleRoot": "…",
+    "auditHeadSeq": 9,
+    "auditHeadHash": "…",
+    "sealedAt": "…",
+    "signature": "…",
+    "keyId": "…"
+  },
+  "turnout": { "registeredVoters": 3, "authorizedVoters": 3, "authorizedWithoutBallot": 0 },
+  "talliedAt": "…"
 }
 ```
+
+### `GET /elections/:id/ballots` (público)
+
+`409` antes da apuração. Depois, o "quadro público" de votos anônimos, **em ordem de commitment**
+(nunca de chegada): `{ "ballots": [{ "id", "commitment", "kind", "candidateId" }] }`.
+
+### Verificação independente
+
+```bash
+npm run verify:result -- http://127.0.0.1:3000 <electionId>
+```
+
+Usa só os dois endpoints públicos: confere as assinaturas, recalcula cada commitment, a Merkle root
+e a contagem, e compara com o resultado publicado.
 
 ## 7. Auditoria
 
