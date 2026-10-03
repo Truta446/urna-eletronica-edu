@@ -122,21 +122,38 @@ para entender o domínio e testar concorrência, idempotência e apuração.
 **Classificação:** sigilo contra quem lê o banco 🔴 não garantido. Anonimato (não vinculação) contra
 dump lógico 🟡 parcialmente mitigado. Contra acesso físico durante a eleição 🔴 não garantido (xmin).
 
-## Versão 2 — voto cifrado (Fase 8, proposta)
+## Versão 2 — voto cifrado (Fase 8 — implementado)
 
-| Pergunta                                  | Proposta                                                                                                                                                                                                                                        |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **O que é cifrado**                       | A escolha canônica com padding de tamanho fixo (o tamanho do ciphertext não pode revelar a escolha).                                                                                                                                            |
-| **Algoritmo**                             | **HPKE** (RFC 9180): DHKEM(X25519, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM, via biblioteca auditada. AAD = `electionId ‖ versão do formato`, para impedir mover um ballot de uma eleição para outra.                                           |
-| **Onde ficam as chaves**                  | O servidor só tem a **chave pública** da eleição. A privada é gerada offline e dividida entre _trustees_ com **Shamir Secret Sharing** (k de n), usando biblioteca auditada. Ninguém sozinho consegue decifrar.                                 |
-| **Rotação**                               | Um par de chaves **por eleição**, sem rotação durante a votação (rotacionar no meio exigiria apurar com duas chaves). Chaves de assinatura (Ed25519) e de HMAC têm identificador de versão (`kid`) e podem rotacionar entre eleições.           |
-| **Anti-adulteração**                      | O AEAD (GCM) detecta alteração do ciphertext. O commitment passa a ser `SHA-256(ciphertext)`. A Merkle root assinada no fechamento detecta inclusão, remoção ou troca de ballots.                                                               |
-| **Apuração**                              | Após `CLOSED`, k trustees reconstroem a chave privada em ambiente isolado, decifram, apuram com a mesma função pura da versão 1 e publicam o resultado com a Merkle root.                                                                       |
-| **Metadados que comprometem o anonimato** | Timestamps; IDs ordenados por tempo (UUID v7, sequences); ordem física (`ctid`, `xmin`, WAL); tamanho do ciphertext; IP e horário em logs; eventos de auditoria por voto; o próprio `idempotency_records` se guardasse hash simples do payload. |
+Ativada por eleição: basta informar `encryptionPublicKey` ao criar a eleição. Sem ela, a eleição
+usa a v1.
 
-**Alternativa estudada e descartada:** cifragem homomórfica (ElGamal exponencial, como no
-ElectionGuard/Helios). Permite apurar sem decifrar votos individuais, mas exige provas de conhecimento
-zero para garantir que cada ballot é válido. Fica como referência, fora do escopo.
+| Pergunta                 | Resposta                                                                                                                                                                                                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **O que é cifrado**      | A escolha, codificada em 17 bytes fixos: `[tipo][UUID do candidato ou zeros]`. No banco, `kind` e `candidate_id` ficam **nulos**.                                                                                                                                                                                           |
+| **Algoritmo**            | **HPKE** (RFC 9180), modo Base: DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-256-GCM, via `@hpke/core`. `info = "urna-edu/ballot/v2"`; **AAD = eleição + id do voto**: copiar um texto cifrado para outro voto ou outra eleição faz a decifragem falhar. Texto cifrado sempre com 33 bytes: o tamanho não revela a escolha. |
+| **Onde ficam as chaves** | `npm run trustees:keygen -- 5 3` gera o par X25519 e divide a **chave privada** com Shamir (`shamir-secret-sharing`, auditada) entre 5 trustees, com limiar 3. A chave privada inteira não é impressa. O servidor guarda **só a chave pública**: durante a eleição, nem o servidor nem o DBA conseguem ler votos guardados. |
+| **Apuração**             | `POST /admin/elections/:id/tally { "trusteeShares": [...] }`. O servidor reconstrói a chave em memória, **confere que ela corresponde à pública** (com partes abaixo do limiar, o Shamir devolve lixo sem falhar), decifra, conta e publica.                                                                                |
+| **Rotação**              | Um par de chaves **por eleição**, congelado após `DRAFT` (trigger). A chave de assinatura Ed25519 tem `keyId`; rotacioná-la exige manter as chaves públicas antigas para verificar resultados antigos (não implementado).                                                                                                   |
+| **Anti-adulteração**     | AEAD (GCM) rejeita qualquer bit alterado. O commitment v2 é calculado sobre o **texto cifrado** (`SHA-256("urna-edu/ballot/v2" ‖ id ‖ eleição ‖ enc ‖ ct)`), então a Merkle root e o lacre funcionam sem a chave.                                                                                                           |
+| **Publicação**           | Após a apuração, a chave privada é **publicada** com o resultado (`decryptionKey`), para que qualquer um refaça a decifragem (`npm run verify:result`). Os votos continuam sem vínculo com eleitores, como na v1.                                                                                                           |
+
+**Metadados que ainda podem comprometer o anonimato:** ordem física de inserção (`xmin`, `ctid`,
+WAL), horários nos logs de acesso, o `xmin` compartilhado entre sessão e voto (T07), a correlação
+de horários entre habilitação e voto (T16). A cifragem protege **o conteúdo**, não esses vínculos.
+
+**O que a v2 NÃO protege (honestamente):**
+
+- O servidor vê a escolha em claro ao cifrar. Um servidor comprometido durante a eleição lê
+  votos, como na v1. Cifrar no cliente exigiria provas de que o texto cifrado contém um voto
+  válido (ZK proofs, como no ElectionGuard e no Helios). Fora do escopo.
+- Quem reúne o limiar de partes durante a eleição lê os votos guardados.
+- **Perder partes acima de `partes − limiar` torna a eleição impossível de apurar.** Isso aconteceu
+  num teste manual deste projeto: as partes não foram guardadas e a eleição ficou fechada para sempre.
+- JavaScript não garante apagar a chave reconstruída da memória.
+
+**Classificação:** sigilo do conteúdo contra quem lê o banco/backup durante a eleição 🟡
+parcialmente mitigado (garantido se as partes não forem reunidas). Contra servidor comprometido 🔴
+não garantido.
 
 ## Audit log (Fase 6 — implementado)
 

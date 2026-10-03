@@ -4,7 +4,7 @@
 
 <br />
 
-![Status](https://img.shields.io/badge/fase-7%20%C2%B7%20apura%C3%A7%C3%A3o-f2c94c?style=for-the-badge)
+![Status](https://img.shields.io/badge/fase-8%20%C2%B7%20criptografia-f2c94c?style=for-the-badge)
 ![Propósito](https://img.shields.io/badge/prop%C3%B3sito-educacional-7fd1a8?style=for-the-badge)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-2f6fb3?style=for-the-badge)
 
@@ -226,7 +226,7 @@ está em [`docs/threat-model.md`](docs/threat-model.md).
 - [x] **Fase 5** — Voto (transações, concorrência, idempotência, anonimato)
 - [x] **Fase 6** — Auditoria (hash chain + `verifyAuditChain()`)
 - [x] **Fase 7** — Apuração determinística + testes de consistência
-- [ ] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
+- [x] **Fase 8** — Criptografia avançada (HPKE + chave dividida entre trustees)
 - [ ] **Fase 9** — Hardening
 - [ ] **Fase 10** — Atacando o próprio sistema
 
@@ -259,17 +259,18 @@ curl localhost:3000/health          # {"status":"ok"}
 curl localhost:3000/health/ready    # {"status":"ok","database":"up"}
 ```
 
-| Comando                               | O que faz                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `npm test`                            | Vitest contra PostgreSQL real (`urna_test`; recusa qualquer banco que não termine em `_test`) |
-| `npm run lint`                        | ESLint (`strictTypeChecked`) + Prettier                                                       |
-| `npm run typecheck`                   | `tsc --noEmit` com `strict` e checagens extras                                                |
-| `npm run build` / `npm start`         | Compila para `dist/` e executa                                                                |
-| `npm run db:migrate:dev`              | Cria uma nova migration a partir do `schema.prisma`                                           |
-| `npm run operator:token -- <label>`   | Gera um token de operador e a linha para `ADMIN_CREDENTIALS` / `POLL_WORKER_CREDENTIALS`      |
-| `npm run secret:generate`             | Gera 32 bytes aleatórios em base64url (ex.: `VOTER_ID_PEPPER`)                                |
-| `npm run signing-key:generate`        | Gera a chave Ed25519 de lacre/resultado                                                       |
-| `npm run verify:result -- <url> <id>` | Verifica um resultado publicado, sem acesso ao banco                                          |
+| Comando                                        | O que faz                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `npm test`                                     | Vitest contra PostgreSQL real (`urna_test`; recusa qualquer banco que não termine em `_test`) |
+| `npm run lint`                                 | ESLint (`strictTypeChecked`) + Prettier                                                       |
+| `npm run typecheck`                            | `tsc --noEmit` com `strict` e checagens extras                                                |
+| `npm run build` / `npm start`                  | Compila para `dist/` e executa                                                                |
+| `npm run db:migrate:dev`                       | Cria uma nova migration a partir do `schema.prisma`                                           |
+| `npm run operator:token -- <label>`            | Gera um token de operador e a linha para `ADMIN_CREDENTIALS` / `POLL_WORKER_CREDENTIALS`      |
+| `npm run secret:generate`                      | Gera 32 bytes aleatórios em base64url (ex.: `VOTER_ID_PEPPER`)                                |
+| `npm run signing-key:generate`                 | Gera a chave Ed25519 de lacre/resultado                                                       |
+| `npm run verify:result -- <url> <id>`          | Verifica um resultado publicado, sem acesso ao banco                                          |
+| `npm run trustees:keygen -- <partes> <limiar>` | Par HPKE da eleição + partes Shamir da chave privada                                          |
 
 ### Experimentando a API
 

@@ -26,7 +26,10 @@ Passo a passo, do cadastro à apuração, com o contrato de cada endpoint.
 }
 ```
 
-- `201` → `{ "id", "name", "status": "DRAFT", "startsAt", "endsAt", "createdAt" }`
+Campo opcional `encryptionPublicKey` (base64url, 32 bytes X25519, de `npm run trustees:keygen`):
+torna a eleição **cifrada** (v2). Fica congelado após `DRAFT`.
+
+- `201` → `{ "id", "name", "status": "DRAFT", "startsAt", "endsAt", "createdAt", "ballotEncryption": "NONE" | "HPKE-X25519-HKDFSHA256-AES256GCM", "encryptionPublicKey": … | null }`
 - `400` body inválido: campos desconhecidos (ex.: `status`, `id`), nome vazio, com caracteres de controle ou com mais de 200 caracteres, data sem fuso horário
 - `422` `endsAt <= startsAt` (também garantido por `CHECK` no banco), `startsAt` no passado, duração acima de 30 dias
 - `415` content-type diferente de JSON
@@ -192,7 +195,10 @@ Os registros são apagados no fechamento da eleição, na mesma transação do `
 
 ### `POST /admin/elections/:id/tally`
 
-Só com `CLOSED`. Antes de contar qualquer voto, confere:
+Só com `CLOSED`. Em eleição cifrada, o body é obrigatório: `{ "trusteeShares": ["…", "…"] }`
+(pelo menos o limiar). Partes insuficientes ou erradas dão `422`, sem abrir nenhum voto.
+
+Antes de contar qualquer voto, confere:
 
 1. assinatura do lacre;
 2. cadeia de auditoria íntegra até o checkpoint assinado (âncora);
@@ -241,7 +247,9 @@ condicional (apurações concorrentes resultam em exatamente uma), eventos `TALL
 ### `GET /elections/:id/ballots` (público)
 
 `409` antes da apuração. Depois, o "quadro público" de votos anônimos, **em ordem de commitment**
-(nunca de chegada): `{ "ballots": [{ "id", "commitment", "kind", "candidateId" }] }`.
+(nunca de chegada): `{ "ballots": [{ "id", "commitment", "kind", "candidateId" }] }`. Em eleição
+cifrada, `kind`/`candidateId` são `null` e vêm `encapsulatedKey` e `ciphertext`; o resultado traz
+`decryptionKey` para a verificação.
 
 ### Verificação independente
 
