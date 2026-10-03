@@ -165,7 +165,7 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
       throw new IntegrityFailure('SEAL_SIGNATURE_INVALID');
     }
 
-    const chain = await auditReader.verify({
+    const chain = await auditReader.verifyChain(await auditReader.chainKeyFor(electionId), {
       anchor: { seq: seal.auditHeadSeq, hash: seal.auditHeadHash },
     });
     if (!chain.valid) throw new IntegrityFailure('AUDIT_CHAIN_INVALID');

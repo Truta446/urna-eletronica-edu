@@ -30,6 +30,10 @@ model Election {
   createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   /// v2: chave pública X25519 (HPKE) da eleição. Nula = votos em claro (v1). Congelada após DRAFT.
   encryptionPublicKey   Bytes?                  @map("encryption_public_key")
+  /// Criada antes de a auditoria existir (só bancos antigos de dev): sem ELECTION_CREATED.
+  /// Default aplicado pelo BANCO (dbgenerated): o Prisma não envia a coluna, que a role da
+  /// aplicação nem pode inserir (GRANT INSERT por coluna).
+  createdBeforeAudit    Boolean                 @default(dbgenerated("false")) @map("created_before_audit")
   candidates            Candidate[]
   voters                Voter[]
   votingSessions        VotingSession[]
@@ -159,7 +163,13 @@ enum AuditActorType {
 /// encadeamento no INSERT e proíbe UPDATE/DELETE. Nunca contém CPF, token ou escolha de voto.
 /// Não existe evento por voto (VOTE_ACCEPTED): correlação por horário (T16).
 model AuditEvent {
-  seq             Int            @id
+  /// Identificador global, gerado pelo banco: só ordenação/paginação, fora de qualquer hash.
+  id              Int            @id @default(autoincrement())
+  /// Cadeia: 'global' (formato 1, legado) ou o id da eleição (formato 2).
+  chainKey        String         @map("chain_key")
+  /// Posição DENTRO da cadeia (contígua a partir de 1).
+  seq             Int
+  format          Int            @db.SmallInt
   eventType       AuditEventType @map("event_type")
   actorType       AuditActorType @map("actor_type")
   actorIdentifier String         @map("actor_identifier")
@@ -170,7 +180,8 @@ model AuditEvent {
   createdAt       DateTime       @map("created_at") @db.Timestamptz(3)
   election        Election?      @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
-  @@index([electionId, seq])
+  @@unique([chainKey, seq])
+  @@index([electionId, id], map: "audit_events_election_id_seq_idx")
   @@map("audit_events")
 }
 

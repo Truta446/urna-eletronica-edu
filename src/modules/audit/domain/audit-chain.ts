@@ -25,7 +25,18 @@ export const SYSTEM_ACTOR: AuditActor = { type: 'SYSTEM', id: 'urna-edu' };
 /** Só valores primitivos: o JSON canônico de números não inteiros tem armadilhas que evitamos. */
 export type AuditPayload = Record<string, string | number | boolean | null>;
 
+/**
+ * Formato 1: cadeia GLOBAL única (legado, Fases 6–10). Formato 2: uma cadeia POR ELEIÇÃO
+ * (escala nacional: seções não esperam umas pelas outras). Logs de auditoria não são
+ * reescritos: eventos antigos continuam no formato 1, verificáveis como sempre foram.
+ */
+export type AuditFormat = 1 | 2;
+
 export interface AuditEventData {
+  format: AuditFormat;
+  /** 'global' (formato 1) ou o id da eleição (formato 2). */
+  chainKey: string;
+  /** Posição DENTRO da cadeia, contígua a partir de 1. */
   seq: number;
   eventType: AuditEventType;
   actorType: AuditActorType;
@@ -49,7 +60,10 @@ export const GENESIS_HASH: Buffer<ArrayBuffer> = Buffer.alloc(32);
  * posição de um evento muda o hash dele.
  */
 export function canonicalEventData(event: AuditEventData): string {
+  // O formato 1 é exatamente o que era assinado antes: mudar isso quebraria eventos antigos.
+  const header = event.format === 1 ? {} : { format: 2, chainKey: event.chainKey };
   const canonical = canonicalize({
+    ...header,
     seq: event.seq,
     eventType: event.eventType,
     actorType: event.actorType,
@@ -74,7 +88,17 @@ export function computeEventHash(
 }
 
 export type ChainFailureReason =
-  'SEQUENCE_GAP' | 'BROKEN_LINK' | 'HASH_MISMATCH' | 'ANCHOR_MISMATCH' | 'ANCHOR_NOT_FOUND';
+  | 'SEQUENCE_GAP'
+  | 'BROKEN_LINK'
+  | 'HASH_MISMATCH'
+  | 'ANCHOR_MISMATCH'
+  | 'ANCHOR_NOT_FOUND'
+  /** Evento de outra cadeia misturado nesta. */
+  | 'WRONG_CHAIN'
+  /** Cadeia de eleição que não começa pelo ELECTION_CREATED. */
+  | 'CHAIN_HEAD_MISMATCH'
+  /** Eleição existente sem nenhum ELECTION_CREATED (cadeia apagada por inteiro). */
+  | 'ELECTION_WITHOUT_AUDIT';
 
 export interface ChainHead {
   seq: number;
