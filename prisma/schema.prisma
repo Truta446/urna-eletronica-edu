@@ -34,6 +34,7 @@ model Election {
   ballots        Ballot[]
   idempotency    IdempotencyRecord[]
   auditEvents    AuditEvent[]
+  tallyResult    TallyResult?
 
   @@map("elections")
 }
@@ -133,6 +134,7 @@ enum AuditEventType {
   BALLOT_BOX_SEALED
   TALLY_STARTED
   TALLY_COMPLETED
+  TALLY_FAILED
 
   @@map("audit_event_type")
 }
@@ -162,4 +164,19 @@ model AuditEvent {
 
   @@index([electionId, seq])
   @@map("audit_events")
+}
+
+/// Resultado oficial, gravado uma única vez (trigger) na transição CLOSED -> TALLIED.
+/// `signature` é Ed25519 sobre a declaração canônica do resultado (ver tally/domain/statements.ts).
+model TallyResult {
+  electionId String   @id @map("election_id") @db.Uuid
+  result     Json
+  merkleRoot Bytes    @map("merkle_root")
+  resultHash Bytes    @map("result_hash")
+  signature  String
+  keyId      String   @map("key_id")
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("tally_results")
 }
