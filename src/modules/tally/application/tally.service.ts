@@ -13,7 +13,13 @@ import {
 } from '../../../shared/errors/app-error.js';
 import { appendAuditEvent, createAuditReader } from '../../audit/application/audit-log.js';
 import type { AuditActor } from '../../audit/domain/audit-chain.js';
-import { resultHash, resultStatement, sealStatement, type SealData } from '../domain/statements.js';
+import {
+  authorizationStatement,
+  resultHash,
+  resultStatement,
+  sealStatement,
+  type SealData,
+} from '../domain/statements.js';
 import {
   tallyBallots,
   UnknownCandidateError,
@@ -30,12 +36,15 @@ import { createTrusteeDecoder } from './encrypted-ballots.js';
 
 export type IntegrityFailureReason =
   | 'SEAL_MISSING'
+  | 'SEAL_DUPLICATED'
+  | 'RESULT_SIGNATURE_INVALID'
   | 'SEAL_SIGNATURE_INVALID'
   | 'AUDIT_CHAIN_INVALID'
   | 'COMMITMENT_MISMATCH'
   | 'MERKLE_ROOT_MISMATCH'
   | 'BALLOT_COUNT_MISMATCH'
   | 'SESSION_COUNT_MISMATCH'
+  | 'AUTHORIZATION_EVENTS_MISMATCH'
   | 'UNDECODABLE_BALLOT'
   | 'UNKNOWN_CANDIDATE';
 
@@ -59,6 +68,12 @@ const sealPayloadSchema = z.object({
 });
 
 export type SealPayload = z.infer<typeof sealPayloadSchema>;
+
+const authorizationPayloadSchema = z.object({
+  nonce: z.string().regex(/^[0-9a-f]{32}$/),
+  signature: z.string(),
+  keyId: z.string(),
+});
 
 export const tallyResultSchema = z.object({
   candidates: z.array(
@@ -86,14 +101,27 @@ export type BallotDecoder = (ballots: StoredBallot[]) => Promise<DecodedChoice[]
 export function createTallyService({ prisma, clock, signer }: TallyDeps) {
   const auditReader = createAuditReader({ prisma });
 
+  /**
+   * Exatamente UM lacre por eleição (Fase 10, ataque A3): a role da aplicação pode inserir
+   * eventos de auditoria, e com dois lacres "qual vale" ficaria ambíguo.
+   */
   async function loadSeal(electionId: string): Promise<SealPayload> {
-    const event = await prisma.auditEvent.findFirst({
+    const events = await prisma.auditEvent.findMany({
       where: { electionId, eventType: 'BALLOT_BOX_SEALED' },
       select: { payload: true },
+      take: 2,
     });
-    const parsed = sealPayloadSchema.safeParse(event?.payload);
+    if (events.length > 1) throw new IntegrityFailure('SEAL_DUPLICATED');
+    const parsed = sealPayloadSchema.safeParse(events[0]?.payload);
     if (!parsed.success) throw new IntegrityFailure('SEAL_MISSING');
     return parsed.data;
+  }
+
+  function sealSignatureValid(electionId: string, seal: SealPayload): boolean {
+    return (
+      seal.keyId === signer.keyId &&
+      verifySignature(signer.publicKey, sealStatement(sealDataOf(electionId, seal)), seal.signature)
+    );
   }
 
   function sealDataOf(electionId: string, seal: SealPayload): SealData {
@@ -133,11 +161,7 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
    */
   async function verifyIntegrity(electionId: string) {
     const seal = await loadSeal(electionId);
-    const sealData = sealDataOf(electionId, seal);
-    if (
-      seal.keyId !== signer.keyId ||
-      !verifySignature(signer.publicKey, sealStatement(sealData), seal.signature)
-    ) {
+    if (!sealSignatureValid(electionId, seal)) {
       throw new IntegrityFailure('SEAL_SIGNATURE_INVALID');
     }
 
@@ -157,10 +181,42 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
     const root = merkleRoot(ballots.map((b) => b.commitment)).toString('hex');
     if (root !== seal.merkleRoot) throw new IntegrityFailure('MERKLE_ROOT_MISMATCH');
 
+    await verifyAuthorizations(electionId);
+
     const consumed = await prisma.votingSession.count({ where: { electionId, consumed: true } });
     if (consumed !== ballots.length) throw new IntegrityFailure('SESSION_COUNT_MISMATCH');
 
     return { seal, ballots, root };
+  }
+
+  /**
+   * Ataque A1 (Fase 10): quem tem só as credenciais do banco consegue marcar eleitores ausentes,
+   * criar sessões e votos consistentes com todos os balanços. Não consegue, porém, gerar eventos
+   * VOTER_AUTHORIZED com assinatura válida. Cópias de um evento legítimo repetem o nonce.
+   */
+  async function verifyAuthorizations(electionId: string) {
+    const events = await prisma.auditEvent.findMany({
+      where: { electionId, eventType: 'VOTER_AUTHORIZED' },
+      select: { payload: true, createdAt: true },
+    });
+    const nonces = new Set<string>();
+    for (const event of events) {
+      const parsed = authorizationPayloadSchema.safeParse(event.payload);
+      if (!parsed.success) continue;
+      const { nonce, signature, keyId } = parsed.data;
+      const statement = authorizationStatement({
+        electionId,
+        nonce,
+        issuedAt: event.createdAt.toISOString(),
+      });
+      if (keyId === signer.keyId && verifySignature(signer.publicKey, statement, signature)) {
+        nonces.add(nonce);
+      }
+    }
+    const authorized = await prisma.voter.count({ where: { electionId, hasVoted: true } });
+    if (nonces.size !== authorized || events.length !== authorized) {
+      throw new IntegrityFailure('AUTHORIZATION_EVENTS_MISMATCH');
+    }
   }
 
   async function count(
@@ -322,14 +378,44 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
   }
 
   /** Tudo o que um verificador externo precisa para refazer a apuração e checar as assinaturas. */
+  /**
+   * O servidor confere a assinatura ANTES de publicar (Fase 10, ataque A4): com as credenciais da
+   * aplicação dá para marcar a eleição como TALLIED e gravar um resultado inventado; sem a chave,
+   * não dá para assiná-lo. Resultado que não verifica não é servido.
+   */
+  async function loadVerifiedResult(electionId: string) {
+    const stored = await prisma.tallyResult.findUnique({ where: { electionId } });
+    try {
+      const seal = await loadSeal(electionId);
+      const result = tallyResultSchema.safeParse(stored?.result);
+      if (!stored || !result.success || !sealSignatureValid(electionId, seal)) {
+        throw new IntegrityFailure('RESULT_SIGNATURE_INVALID');
+      }
+      const statement = resultStatement({
+        electionId,
+        merkleRoot: Buffer.from(stored.merkleRoot).toString('hex'),
+        result: result.data,
+        sealSignature: seal.signature,
+      });
+      const valid =
+        stored.keyId === signer.keyId &&
+        resultHash(statement).equals(stored.resultHash) &&
+        verifySignature(signer.publicKey, statement, stored.signature);
+      if (!valid) throw new IntegrityFailure('RESULT_SIGNATURE_INVALID');
+      return { stored, seal, result: result.data };
+    } catch (error) {
+      if (error instanceof IntegrityFailure) throw new IntegrityError(error.reason);
+      throw error;
+    }
+  }
+
   async function published(electionId: string) {
     const election = await requireTallied(electionId);
-    const stored = await prisma.tallyResult.findUniqueOrThrow({ where: { electionId } });
-    const seal = await loadSeal(electionId);
+    const { stored, seal, result } = await loadVerifiedResult(electionId);
     return {
       electionId,
       electionName: election.name,
-      result: tallyResultSchema.parse(stored.result),
+      result,
       merkleRoot: Buffer.from(stored.merkleRoot).toString('hex'),
       resultHash: Buffer.from(stored.resultHash).toString('hex'),
       signature: stored.signature,
@@ -352,6 +438,7 @@ export function createTallyService({ prisma, clock, signer }: TallyDeps) {
   /** O "quadro público" de votos: anônimos, em ordem de commitment (nunca de chegada). */
   async function publishedBallots(electionId: string) {
     await requireTallied(electionId);
+    await loadVerifiedResult(electionId);
     const ballots = await loadBallots(electionId);
     const b64 = (bytes: Uint8Array | null | undefined) =>
       bytes ? Buffer.from(bytes).toString('base64url') : null;
